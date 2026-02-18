@@ -63,7 +63,7 @@ public class JwtFilter extends OncePerRequestFilter {
             {
               "status": 401,
               "error": "UNAUTHORIZED",
-              "message": "Você excedeu o limite de requisições. Tente novamente em alguns segundos.",
+              "message": "Token inválido ou expirado.",
               "timestamp": "%s"
             }
             """.formatted(java.time.Instant.now());
