@@ -3,14 +3,13 @@ package com.moneyMagnetApi.demo.service;
 import com.moneyMagnetApi.demo.domain.category.CategoryType;
 import com.moneyMagnetApi.demo.domain.transaction.Transaction;
 import com.moneyMagnetApi.demo.dto.response.CategoryTotalDTO;
+import com.moneyMagnetApi.demo.dto.response.DashboardSummaryDTO;
 import com.moneyMagnetApi.demo.dto.response.MonthlyTotalDTO;
 import com.moneyMagnetApi.demo.repository.TransactionRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class DashboardService {
@@ -21,13 +20,52 @@ public class DashboardService {
         this.transactionRepository = transactionRepository;
     }
 
-    // Totais por mês
-    public List<MonthlyTotalDTO> getMonthlyTotals(UUID userId, LocalDate initDate, LocalDate endDate) {
-        List<Transaction> transactions = transactionRepository.findMonthlyTotals(userId, initDate, endDate);
+    public DashboardSummaryDTO summary(
+            UUID userId,
+            Integer year,
+            Integer month
+    ) {
+        List<Transaction> transactions = transactionRepository.findAllByYearAndMonth(userId, year, month);
+
+        BigDecimal receita = BigDecimal.ZERO;
+        BigDecimal despesa = BigDecimal.ZERO;
+
+        for (Transaction transaction : transactions) {
+            switch (transaction.getCategory().getType().toString()) {
+                case "RECEITA":
+                    receita = receita.add(transaction.getAmount());
+                    break;
+                case "DESPESA":
+                    despesa = despesa.add(transaction.getAmount());
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        BigDecimal lucro = receita.subtract(despesa);
+        Double margem = receita.compareTo(BigDecimal.ZERO) == 0
+                ? 0.0
+                : lucro.divide(receita, 4, java.math.RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
+
+
+        return new DashboardSummaryDTO(
+            receita,
+            despesa,
+            lucro,
+            margem
+        );
+    }
+
+    public List<MonthlyTotalDTO> getMonthlyTotals(UUID userId, Integer year) {
+        List<Transaction> transactions = transactionRepository.findAllByYear(userId, year);
+
 
         Map<Integer, MonthlyTotalDTO> map = new HashMap<>();
 
-        for (int month = initDate.getMonthValue(); month <= endDate.getMonthValue(); month++) {
+        for (int month = 1; month <= 12; month++) {
             map.put(month, new MonthlyTotalDTO(
                     getMonthName(month),
                     BigDecimal.ZERO,
@@ -57,21 +95,14 @@ public class DashboardService {
             ));
         }
 
-        // Ordena por mês
         return map.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(Map.Entry::getValue)
                 .toList();
     }
 
-    // Totais por categoria
-    public List<CategoryTotalDTO> getCategoryTotals(UUID userId, LocalDate initDate, LocalDate endDate) {
-        List<Transaction> transactions = transactionRepository.findAll()
-                .stream()
-                .filter(t -> t.getUsuario().getId().equals(userId)
-                        && !t.getDate().isBefore(initDate)
-                        && !t.getDate().isAfter(endDate))
-                .toList();
+    public List<CategoryTotalDTO> calculateCategoryTotals(UUID userId, Integer year) {
+        List<Transaction> transactions = transactionRepository.findAllByYear(userId, year);
 
         Map<String, CategoryTotalDTO> map = new HashMap<>();
 

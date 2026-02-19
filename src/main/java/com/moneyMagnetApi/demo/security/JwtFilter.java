@@ -36,30 +36,31 @@ public class JwtFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        try {
-            String token = recoverToken(request);
+        String token = recoverToken(request);
 
-            UUID id = tokenService.validateToken(token);
+        if (token != null) {
+            try {
+                UUID id = tokenService.validateToken(token);
 
-            Optional<Usuario> usuarioOpt = usuarioRepository.findById(id);
+                Optional<Usuario> usuarioOpt = usuarioRepository.findById(id);
 
-            if (usuarioOpt.isPresent()) {
-                UsuarioDetailsImpl usuarioDetails =
-                        new UsuarioDetailsImpl(usuarioOpt.get());
+                if (usuarioOpt.isPresent()) {
+                    UsuarioDetailsImpl usuarioDetails =
+                            new UsuarioDetailsImpl(usuarioOpt.get());
 
-                var auth = new UsernamePasswordAuthenticationToken(
-                        usuarioDetails,
-                        null,
-                        usuarioDetails.getAuthorities()
-                );
+                    var auth = new UsernamePasswordAuthenticationToken(
+                            usuarioDetails,
+                            null,
+                            usuarioDetails.getAuthorities()
+                    );
 
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            }
-        } catch (JWTVerificationException ex) {
-            response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            response.setContentType("application/json");
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
+            } catch (JWTVerificationException ex) {
+                response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                response.setContentType("application/json");
 
-            String body = """
+                String body = """
             {
               "status": 401,
               "error": "UNAUTHORIZED",
@@ -68,8 +69,9 @@ public class JwtFilter extends OncePerRequestFilter {
             }
             """.formatted(java.time.Instant.now());
 
-            response.getWriter().write(body);
-            return;
+                response.getWriter().write(body);
+                return;
+            }
         }
 
         filterChain.doFilter(request, response);
