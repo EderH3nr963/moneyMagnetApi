@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -44,30 +45,33 @@ public class JwtFilter extends OncePerRequestFilter {
 
                 Optional<Usuario> usuarioOpt = usuarioRepository.findById(id);
 
-                if (usuarioOpt.isPresent()) {
-                    UsuarioDetailsImpl usuarioDetails =
-                            new UsuarioDetailsImpl(usuarioOpt.get());
-
-                    var auth = new UsernamePasswordAuthenticationToken(
-                            usuarioDetails,
-                            null,
-                            usuarioDetails.getAuthorities()
-                    );
-
-                    SecurityContextHolder.getContext().setAuthentication(auth);
+                if (usuarioOpt.isEmpty()) {
+                    throw new UsernameNotFoundException("Usuário não encontrado para o token.");
                 }
-            } catch (JWTVerificationException ex) {
+
+                UsuarioDetailsImpl usuarioDetails =
+                        new UsuarioDetailsImpl(usuarioOpt.get());
+
+                var auth = new UsernamePasswordAuthenticationToken(
+                        usuarioDetails,
+                        null,
+                        usuarioDetails.getAuthorities()
+                );
+
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (JWTVerificationException | UsernameNotFoundException ex) {
                 response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                response.setContentType("application/json");
+                response.setContentType("application/json;charset=UTF-8");
+                response.setCharacterEncoding("UTF-8");
 
                 String body = """
-            {
-              "status": 401,
-              "error": "UNAUTHORIZED",
-              "message": "Token inválido ou expirado.",
-              "timestamp": "%s"
-            }
-            """.formatted(java.time.Instant.now());
+                {
+                  "status": 401,
+                  "error": "UNAUTHORIZED",
+                  "message": "Token inválido ou usuário inexistente.",
+                  "timestamp": "%s"
+                }
+                """.formatted(java.time.Instant.now());
 
                 response.getWriter().write(body);
                 return;

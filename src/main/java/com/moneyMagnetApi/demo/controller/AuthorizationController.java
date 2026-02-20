@@ -53,7 +53,7 @@ public class AuthorizationController {
     ) {
         AuthorizationResponseDTO response = authorizationService.login(dto);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.ok().body(response);
     }
 
     @PostMapping("/forgot-password")
