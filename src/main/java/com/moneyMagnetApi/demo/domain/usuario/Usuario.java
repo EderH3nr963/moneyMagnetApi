@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity(name = "usuario")
-@SQLDelete(sql = "UPDATE Usuario SET deleted = true WHERE id = ?")
+@SQLDelete(sql = "UPDATE Usuario SET deleted = true, email = (usuario.email || '#deleted_' || usuario.id), username  = (usuario.username || '#deleted_' || usuario.id)  WHERE id = ?")
 @SQLRestriction("deleted = false")
 public class Usuario {
     @Id

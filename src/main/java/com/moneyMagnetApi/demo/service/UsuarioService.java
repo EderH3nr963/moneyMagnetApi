@@ -112,9 +112,6 @@ public class UsuarioService {
 
         Usuario usuario = findUsuarioOrThrow(id);
 
-        usuario.setEmail(usuario.getEmail() + "#deleted_" + usuario.getId());
-        usuario.setUsername(usuario.getUsername() + "#deleted_" + usuario.getId());
-
         usuarioRepository.delete(usuario);
     }
 
