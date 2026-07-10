@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TransactionSyncServiceTest {
 
     private final TransactionSyncService service =
-            new TransactionSyncService(null, null, null, null, null);
+            new TransactionSyncService(null, null, null, null, null, null);
 
     @Test
     void shouldUseNatureReceivedFromPluggy() {
