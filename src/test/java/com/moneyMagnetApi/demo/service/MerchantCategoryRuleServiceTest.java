@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MerchantCategoryRuleServiceTest {
 
     private final MerchantCategoryRuleService service =
-            new MerchantCategoryRuleService(null, null, null, null);
+            new MerchantCategoryRuleService(null, null, null, null, null, null);
 
     @Test
     void shouldResolveMerchantIgnoringCaseAndExtraSpaces() {
