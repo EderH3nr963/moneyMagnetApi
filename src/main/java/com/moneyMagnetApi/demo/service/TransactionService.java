@@ -1,187 +1,225 @@
 package com.moneyMagnetApi.demo.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.category.Category;
 import com.moneyMagnetApi.demo.domain.transaction.Transaction;
-import com.moneyMagnetApi.demo.domain.usuario.Usuario;
-import com.moneyMagnetApi.demo.dto.request.*;
-import com.moneyMagnetApi.demo.dto.response.PageTransactionResponseDTO;
-import com.moneyMagnetApi.demo.dto.response.TransactionImportResponseDTO;
-import com.moneyMagnetApi.demo.dto.response.TransactionResponseDTO;
-import com.moneyMagnetApi.demo.repository.CategoryRepository;
+import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
+import com.moneyMagnetApi.demo.dto.transaction.response.TransactionResponse;
+import com.moneyMagnetApi.demo.repository.AccountRepository;
 import com.moneyMagnetApi.demo.repository.TransactionRepository;
-import com.moneyMagnetApi.demo.repository.UsuarioRepository;
-import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.StringUtils;
 
-import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class TransactionService {
 
+    private static final List<TransactionNature> DEFAULT_NATURES = List.of(
+            TransactionNature.INCOME,
+            TransactionNature.EXPENSE
+    );
+    
+    private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
-    private final CategoryRepository categoryRepository;
-    private final ExcelService excelService;
-    private final UsuarioRepository usuarioRepository;
-
-    public TransactionService(
-            TransactionRepository transactionRepository,
-            CategoryRepository categoryRepository,
-            ExcelService excelService,
-            UsuarioRepository usuarioRepository
+    private final AuthorizationService authorizationService;
+    private final TransactionSyncService transactionSyncService;
+    private final Cache<String, Page<TransactionResponse>> transactionsPageCache;
+    private final Cache<String, List<TransactionResponse>> transactionsByAccountCache;
+    private final Cache<String, TransactionResponse> transactionByIdCache;
+    private final AppCacheInvalidationService cacheInvalidationService;
+    
+    private boolean shouldSync(Account account) {
+        LocalDateTime lastSync = account.getLastTransactionSync();
+        
+        return lastSync == null
+                || lastSync.isBefore(LocalDateTime.now().minusHours(6));
+    }
+    
+    @Transactional(readOnly = true)
+    public Page<TransactionResponse> findAll(
+            UUID userId,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
     ) {
-        this.transactionRepository = transactionRepository;
-        this.categoryRepository = categoryRepository;
-        this.excelService = excelService;
-        this.usuarioRepository = usuarioRepository;
-    }
-
-    @Transactional(readOnly = true)
-    public PageTransactionResponseDTO getAll(UUID usuarioId, Pageable pageable) {
-        Page<Transaction> pageTransaction =
-                transactionRepository.findByUsuarioId(usuarioId, pageable);
-
-        return PageTransactionResponseDTO.from(pageTransaction);
-    }
-
-    @Transactional(readOnly = true)
-    public TransactionResponseDTO getById(UUID usuarioId, UUID transactionId) {
-
-        Transaction transaction = findTransactionOrThrow(usuarioId, transactionId);
-
-        return TransactionResponseDTO.fromTransaction(transaction);
-    }
-
-    @Transactional
-    public TransactionImportResponseDTO importXlsx(UUID usuarioId, MultipartFile file) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
-
-        try {
-            var response = excelService.readExcel(usuario, file);
-
-            if (!response.transactions().isEmpty()) {
-                transactionRepository.saveAll(response.transactions());
-            }
-
-            return new TransactionImportResponseDTO(
-                    response.transactions().size(),
-                    response.transactions()
-                            .stream()
-                            .map(TransactionResponseDTO::fromTransaction)
-                            .toList(),
-                    response.errors()
-            );
-
-        } catch (IOException e) {
-            throw new RuntimeException("Erro ao processar o arquivo Excel informado", e);
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("A data inicial nao pode ser maior que a data final.");
         }
+
+        List<Account> accounts =
+                accountRepository.findAllByItemUsuarioIdOrderByNameAsc(userId);
+        
+        for (Account account : accounts) {
+            if (shouldSync(account)) {
+                transactionSyncService.syncTransactions(account);
+            }
+        }
+
+        return transactionsPageCache.get(
+                transactionPageCacheKey(userId, startDate, endDate, pageable),
+                key -> loadTransactionsPage(userId, startDate, endDate, pageable)
+        );
     }
 
-    @Transactional
-    public TransactionResponseDTO create(UUID usuarioId, CreateTransactionDTO dto) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
-        Category category = categoryRepository
-                .findByIdAndUsuarioId(dto.category_id(), usuarioId)
+    private Page<TransactionResponse> loadTransactionsPage(
+            UUID userId,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    ) {
+        
+        LocalDateTime startDateTime = startDate != null
+                ? startDate.atStartOfDay()
+                : null;
+        LocalDateTime endDateTime = endDate != null
+                ? endDate.plusDays(1).atStartOfDay()
+                : null;
+
+        Page<Transaction> transactions = findAllByPeriod(
+                userId,
+                startDateTime,
+                endDateTime,
+                pageable
+        );
+        
+        return transactions.map(TransactionResponse::fromResponse);
+    }
+
+    private Page<Transaction> findAllByPeriod(
+            UUID userId,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            Pageable pageable
+    ) {
+        if (startDate != null && endDate != null) {
+            return transactionRepository.findAllByUserAndNatureInBetween(
+                    userId,
+                    DEFAULT_NATURES,
+                    startDate,
+                    endDate,
+                    pageable
+            );
+        }
+
+        if (startDate != null) {
+            return transactionRepository.findAllByUserAndNatureInStartingAt(
+                    userId,
+                    DEFAULT_NATURES,
+                    startDate,
+                    pageable
+            );
+        }
+
+        if (endDate != null) {
+            return transactionRepository.findAllByUserAndNatureInEndingBefore(
+                    userId,
+                    DEFAULT_NATURES,
+                    endDate,
+                    pageable
+            );
+        }
+
+        return transactionRepository.findAllByUserAndNatureIn(
+                userId,
+                DEFAULT_NATURES,
+                pageable
+        );
+    }
+    
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> findByAccount(UUID userId, UUID accountId) {
+        return transactionsByAccountCache.get(cacheKey(userId, accountId), key -> loadByAccount(userId, accountId));
+    }
+
+    private List<TransactionResponse> loadByAccount(UUID userId, UUID accountId) {
+        
+        Account account = accountRepository
+                .findByIdAndItemUsuarioId(accountId, userId)
                 .orElseThrow(() ->
-                        new EntityNotFoundException("Categoria selecionada não encontrada para o usuário informado")
+                        new IllegalArgumentException("Conta não encontrada."));
+        
+        if (shouldSync(account))
+            transactionSyncService.syncTransactions(account);
+        
+        List<Transaction> transactions =
+                transactionRepository.findAllByAccountAndNatureIn(
+                        account,
+                        DEFAULT_NATURES
                 );
-
-        Transaction transaction = new Transaction();
-        transaction.setDescription(dto.description());
-        transaction.setDate(dto.date());
-        transaction.setAmount(dto.amount());
-        transaction.setCategory(category);
-        transaction.setUsuario(usuario);
-
+        
+        return transactions.stream().map((transaction) -> TransactionResponse.fromResponse(transaction)).toList();
+    }
+    
+    @Transactional
+    public TransactionResponse update(
+            UUID userId,
+            UUID transactionId,
+            String description,
+            UUID categoryId
+    ) {
+        
+        Transaction transaction = authorizationService.validateTransaction(userId, transactionId);
+        
+        if (StringUtils.hasText(description)) {
+            transaction.setDescription(description.trim());
+        }
+        
+        if (categoryId != null) {
+            Category category = authorizationService.validateCategory(userId, categoryId);
+            
+            transaction.setCategory(category);
+        }
+        
         transactionRepository.save(transaction);
-
-        return TransactionResponseDTO.fromTransaction(transaction);
+        cacheInvalidationService.invalidateTransactions();
+        
+        return TransactionResponse.fromResponse(transaction);
     }
+    
+    @Transactional(readOnly = true)
+    public TransactionResponse findById(UUID userId, UUID transactionId) {
+        return transactionByIdCache.get(cacheKey(userId, transactionId), key -> {
+            Transaction transaction = authorizationService.validateTransaction(userId, transactionId);
 
-    @Transactional
-    public TransactionResponseDTO update(
-            UUID usuarioId,
-            UUID transactionId,
-            UpdateTransactionDTO dto
-    ) {
-        Transaction transaction = findTransactionOrThrow(usuarioId, transactionId);
-        Category category = categoryRepository
-                .findByIdAndUsuarioId(dto.category_id(), usuarioId)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("Categoria selecionada não encontrada para o usuário informado")
-                );
-
-        transaction.setDescription(dto.description());
-        transaction.setDate(dto.date());
-        transaction.setAmount(dto.amount());
-        transaction.setCategory(category);
-
-        return TransactionResponseDTO.fromTransaction(transaction);
+            return TransactionResponse.fromResponse(transaction);
+        });
     }
-
+    
     @Transactional
-    public TransactionResponseDTO updateDescription(
-            UUID usuarioId,
-            UUID transactionId,
-            UpdateDescriptionTransactionDTO dto
-    ) {
-
-        Transaction transaction = findTransactionOrThrow(usuarioId, transactionId);
-
-        transaction.setDescription(dto.description());
-
-        return TransactionResponseDTO.fromTransaction(transaction);
-    }
-
-    @Transactional
-    public TransactionResponseDTO updateAmount(
-            UUID usuarioId,
-            UUID transactionId,
-            UpdateAmountTransactionDTO dto
-    ) {
-
-        Transaction transaction = findTransactionOrThrow(usuarioId, transactionId);
-
-        transaction.setAmount(dto.amount());
-
-        return TransactionResponseDTO.fromTransaction(transaction);
-    }
-
-    @Transactional
-    public TransactionResponseDTO updateDate(
-            UUID usuarioId,
-            UUID transactionId,
-            UpdateDateTransactionDTO dto
-    ) {
-
-        Transaction transaction = findTransactionOrThrow(usuarioId, transactionId);
-
-        transaction.setDate(dto.date());
-
-        return TransactionResponseDTO.fromTransaction(transaction);
-    }
-
-    @Transactional
-    public void delete(UUID usuarioId, UUID transactionId) {
-
-        Transaction transaction = findTransactionOrThrow(usuarioId, transactionId);
-
+    public void delete(UUID userId, UUID transactionId) {
+        
+        Transaction transaction = authorizationService.validateTransaction(userId, transactionId);
+        
         transactionRepository.delete(transaction);
+        cacheInvalidationService.invalidateTransactions();
     }
 
-    private Transaction findTransactionOrThrow(UUID usuarioId, UUID transactionId) {
-        return transactionRepository
-                .findByIdAndUsuarioId(transactionId, usuarioId)
-                .orElseThrow(() ->
-                        new EntityNotFoundException("Transação não encontrada para o usuário informado")
-                );
+    private String cacheKey(UUID userId, UUID resourceId) {
+        return userId + ":" + resourceId;
     }
+
+    private String transactionPageCacheKey(
+            UUID userId,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    ) {
+        return userId
+                + ":" + (startDate == null ? "" : startDate)
+                + ":" + (endDate == null ? "" : endDate)
+                + ":" + pageable.getPageNumber()
+                + ":" + pageable.getPageSize()
+                + ":" + pageable.getSort();
+    }
+    
 }

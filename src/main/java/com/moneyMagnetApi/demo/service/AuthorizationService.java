@@ -1,25 +1,31 @@
 package com.moneyMagnetApi.demo.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.moneyMagnetApi.demo.domain.account.Account;
+import com.moneyMagnetApi.demo.domain.category.Category;
+import com.moneyMagnetApi.demo.domain.item.Item;
+import com.moneyMagnetApi.demo.domain.transaction.Transaction;
 import com.moneyMagnetApi.demo.domain.usuario.PasswordResetToken;
 import com.moneyMagnetApi.demo.domain.usuario.Usuario;
 import com.moneyMagnetApi.demo.domain.usuario.UsuarioRole;
-import com.moneyMagnetApi.demo.dto.request.ForgotPasswordDTO;
-import com.moneyMagnetApi.demo.dto.request.LoginRequestDTO;
-import com.moneyMagnetApi.demo.dto.request.RegisterRequestDTO;
-import com.moneyMagnetApi.demo.dto.request.ResetPasswordDTO;
-import com.moneyMagnetApi.demo.dto.response.AuthorizationResponseDTO;
-import com.moneyMagnetApi.demo.dto.response.UsuarioResponseDTO;
+import com.moneyMagnetApi.demo.dto.auth.request.ForgotPasswordDTO;
+import com.moneyMagnetApi.demo.dto.auth.request.LoginRequestDTO;
+import com.moneyMagnetApi.demo.dto.auth.request.RegisterRequestDTO;
+import com.moneyMagnetApi.demo.dto.auth.request.ResetPasswordDTO;
+import com.moneyMagnetApi.demo.dto.auth.response.AuthorizationResponseDTO;
+import com.moneyMagnetApi.demo.dto.usuario.response.UsuarioResponseDTO;
 import com.moneyMagnetApi.demo.exception.BusinessException;
-import com.moneyMagnetApi.demo.repository.PasswordResetTokenRepository;
-import com.moneyMagnetApi.demo.repository.UsuarioRepository;
+import com.moneyMagnetApi.demo.repository.*;
 import com.moneyMagnetApi.demo.security.TokenService;
 import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
 import com.moneyMagnetApi.demo.utils.TokenGenerator;
 import jakarta.mail.MessagingException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,14 +34,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class AuthorizationService {
     @Value("${app.frontend.base-url}")
     private String baseFrontUrl;
@@ -44,23 +49,13 @@ public class AuthorizationService {
     private final TokenService tokenService;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
-    private final PasswordResetTokenRepository tokenRepository; // ✅ ponto e vírgula
+    private final PasswordResetTokenRepository tokenRepository;
+    private final ItemRepository itemRepository;
     private final EmailService emailService;
-
-    public AuthorizationService(
-            AuthenticationManager authenticationManager,
-            TokenService tokenService,
-            UsuarioRepository usuarioRepository,
-            PasswordEncoder passwordEncoder,
-            PasswordResetTokenRepository tokenRepository,
-            EmailService emailService) {
-        this.authenticationManager = authenticationManager;
-        this.tokenService = tokenService;
-        this.usuarioRepository = usuarioRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.tokenRepository = tokenRepository;
-        this.emailService = emailService;
-    }
+    private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
+    private final CategoryRepository categoryRepository;
+    private final Cache<String, Item> itemByUserAndIdCache;
 
     private AuthorizationResponseDTO authenticateAndGenerateResponse(
             String email,
@@ -180,6 +175,31 @@ public class AuthorizationService {
         resetToken.setUsedAt(Instant.now());
         tokenRepository.save(resetToken);
     }
+    
+    public Item validateItem(UUID userId, UUID itemId) {
+        return itemByUserAndIdCache.get(cacheKey(userId, itemId), key ->
+                itemRepository.findByIdAndUsuarioId(itemId, userId)
+                        .orElseThrow(() -> new AccessDeniedException("Item não encontrado."))
+        );
+    }
+    
+    public Account validateAccount(UUID userId, UUID accountId) {
+        return accountRepository.findByIdAndItemUsuarioId(accountId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Conta não encontrada."));
+    }
+    
+    public Transaction validateTransaction(UUID userId, UUID transactionId) {
+        return transactionRepository
+                .findByIdAndAccountItemUsuarioId(transactionId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Transação não encontrada."));
+    }
+    
+    public Category validateCategory(UUID userId, UUID categoryId) {
+        return categoryRepository.findAccessibleById(categoryId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Categoria não encontrada."));
+    }
 
-
+    private String cacheKey(UUID userId, UUID resourceId) {
+        return userId + ":" + resourceId;
+    }
 }

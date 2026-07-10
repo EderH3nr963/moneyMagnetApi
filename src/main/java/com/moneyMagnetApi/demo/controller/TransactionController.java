@@ -1,134 +1,167 @@
 package com.moneyMagnetApi.demo.controller;
 
-import com.moneyMagnetApi.demo.dto.request.*;
-import com.moneyMagnetApi.demo.dto.response.CategoryResponseDTO;
-import com.moneyMagnetApi.demo.dto.response.PageTransactionResponseDTO;
-import com.moneyMagnetApi.demo.dto.response.TransactionImportResponseDTO;
-import com.moneyMagnetApi.demo.dto.response.TransactionResponseDTO;
+import com.moneyMagnetApi.demo.dto.transaction.response.TransactionResponse;
 import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
 import com.moneyMagnetApi.demo.service.TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/transaction")
-@Tag(
-        name = "Transacao",
-        description = "Rotas de manipulação de tranasações para usuário"
-)
+@RequestMapping("/transactions")
+@RequiredArgsConstructor
+@Tag(name = "Transacoes", description = "Consulta, edicao e remocao de transacoes financeiras")
 public class TransactionController {
+    
     private final TransactionService transactionService;
-
-    public TransactionController(TransactionService transactionService) {
-        this.transactionService =  transactionService;
-    }
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<TransactionResponseDTO> create(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @RequestBody @Valid CreateTransactionDTO dto
-    ) {
-        TransactionResponseDTO response = transactionService.create(usuarioDetails.getId(), dto);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @PostMapping(value="/import/xlsx", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<TransactionImportResponseDTO> importXlsx(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @RequestParam("file") MultipartFile file
-    ) {
-        TransactionImportResponseDTO response = transactionService.importXlsx(usuarioDetails.getId(), file);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @GetMapping("/{transactionId}")
-    public ResponseEntity<TransactionResponseDTO> getById(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @PathVariable UUID transactionId
-    ) {
-        TransactionResponseDTO response = transactionService.getById(usuarioDetails.getId(), transactionId);
-
-        return ResponseEntity.ok().body(response);
-    }
-
+    
     @GetMapping
-    public ResponseEntity<PageTransactionResponseDTO> getAllPageSortingByDate(
+    @Operation(
+            summary = "Lista transacoes do usuario",
+            description = "Retorna transacoes paginadas, com filtro opcional por periodo.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Pagina de transacoes retornada"),
+                    @ApiResponse(responseCode = "400", description = "Filtro de data invalido"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public ResponseEntity<Page<TransactionResponse>> findAll(
             @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @PageableDefault(size = 10, sort = "date", direction = Sort.Direction.DESC) Pageable pageable
+            @Parameter(description = "Data inicial no formato yyyy-MM-dd")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDate,
+            @Parameter(description = "Data final no formato yyyy-MM-dd")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate endDate,
+            
+            @ParameterObject
+            @PageableDefault(
+                    page = 0,
+                    size = 20,
+                    sort = "paymentDate",
+                    direction = Sort.Direction.DESC
+            )
+            Pageable pageable
     ) {
-        PageTransactionResponseDTO response = transactionService.getAll(usuarioDetails.getId(), pageable);
-
-        return ResponseEntity.ok().body(response);
+        return ResponseEntity.ok(
+                transactionService.findAll(
+                        usuarioDetails.getId(),
+                        startDate,
+                        endDate,
+                        pageable
+                )
+        );
     }
-
+    
+    @GetMapping("/{transactionId}")
+    @Operation(
+            summary = "Busca uma transacao por ID",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Transacao encontrada"),
+                    @ApiResponse(responseCode = "404", description = "Transacao nao encontrada"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public ResponseEntity<TransactionResponse> findById(
+            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
+            @Parameter(description = "ID da transacao") @PathVariable UUID transactionId
+    ) {
+        
+        UUID userId = usuarioDetails.getId();
+        
+        return ResponseEntity.ok(
+                transactionService.findById(userId, transactionId)
+        );
+    }
+    
+    @GetMapping("/account/{accountId}")
+    @Operation(
+            summary = "Lista transacoes de uma conta",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Transacoes retornadas"),
+                    @ApiResponse(responseCode = "404", description = "Conta nao encontrada"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public ResponseEntity<List<TransactionResponse>> findByAccount(
+            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
+            @Parameter(description = "ID da conta") @PathVariable UUID accountId
+    ) {
+        
+        UUID userId = usuarioDetails.getId();
+        
+        return ResponseEntity.ok(
+                transactionService.findByAccount(userId, accountId)
+        );
+    }
+    
     @PutMapping("/{transactionId}")
-    public ResponseEntity<TransactionResponseDTO> updateTransaction(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails,
-            @PathVariable UUID transactionId,
-            @RequestBody UpdateTransactionDTO dto
-    ) {
-        UUID usuarioId = userDetails.getId();
-        TransactionResponseDTO transaction = transactionService.update(usuarioId, transactionId, dto);
-        return ResponseEntity.ok(transaction);
-    }
-
-    @PatchMapping("/{transactionId}/description")
-    public ResponseEntity<TransactionResponseDTO> updateDescription(
+    @Operation(
+            summary = "Atualiza dados editaveis de uma transacao",
+            description = "Permite alterar descricao e/ou categoria de uma transacao.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Transacao atualizada"),
+                    @ApiResponse(responseCode = "404", description = "Transacao ou categoria nao encontrada"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public ResponseEntity<TransactionResponse> update(
             @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @PathVariable UUID transactionId,
-            @RequestBody @Valid UpdateDescriptionTransactionDTO dto
+            @Parameter(description = "ID da transacao") @PathVariable UUID transactionId,
+            @Parameter(description = "Nova descricao da transacao")
+            @RequestParam(required = false) String description,
+            @Parameter(description = "ID da nova categoria")
+            @RequestParam(required = false) UUID categoryId
     ) {
-        TransactionResponseDTO response = transactionService.updateDescription(usuarioDetails.getId(), transactionId, dto);
-
-        return ResponseEntity.ok().body(response);
+        
+        UUID userId = usuarioDetails.getId();
+        
+        return ResponseEntity.ok(
+                transactionService.update(
+                        userId,
+                        transactionId,
+                        description,
+                        categoryId
+                )
+        );
     }
-
-    @PatchMapping("/{transactionId}/amount")
-    public ResponseEntity<TransactionResponseDTO> updateAmount(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @PathVariable UUID transactionId,
-            @RequestBody @Valid UpdateAmountTransactionDTO dto
-    ) {
-        TransactionResponseDTO response = transactionService.updateAmount(usuarioDetails.getId(), transactionId, dto);
-
-        return ResponseEntity.ok().body(response);
-    }
-
-    @PatchMapping("/{transactionId}/date")
-    public ResponseEntity<TransactionResponseDTO> updateDate(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @PathVariable UUID transactionId,
-            @RequestBody @Valid UpdateDateTransactionDTO dto
-    ) {
-        TransactionResponseDTO response = transactionService.updateDate(usuarioDetails.getId(), transactionId, dto);
-
-        return ResponseEntity.ok().body(response);
-    }
-
+    
     @DeleteMapping("/{transactionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public ResponseEntity<Void> delete(
+    @Operation(
+            summary = "Remove uma transacao",
+            responses = {
+                    @ApiResponse(responseCode = "204", description = "Transacao removida"),
+                    @ApiResponse(responseCode = "404", description = "Transacao nao encontrada"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public void delete(
             @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @PathVariable UUID transactionId
+            @Parameter(description = "ID da transacao") @PathVariable UUID transactionId
     ) {
-        transactionService.delete(usuarioDetails.getId(), transactionId);
-
-        return ResponseEntity.noContent().build();
+        
+        UUID userId = usuarioDetails.getId();
+        
+        transactionService.delete(userId, transactionId);
     }
+    
 }

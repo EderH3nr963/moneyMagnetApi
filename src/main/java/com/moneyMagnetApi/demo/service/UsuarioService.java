@@ -1,11 +1,12 @@
 package com.moneyMagnetApi.demo.service;
 
 import com.moneyMagnetApi.demo.domain.usuario.Usuario;
-import com.moneyMagnetApi.demo.dto.request.UpdateEmailAndUsernameDTO;
-import com.moneyMagnetApi.demo.dto.request.UpdateEmailDTO;
-import com.moneyMagnetApi.demo.dto.request.UpdatePasswordDTO;
-import com.moneyMagnetApi.demo.dto.request.UpdateUsernameDTO;
-import com.moneyMagnetApi.demo.dto.response.UsuarioResponseDTO;
+import com.moneyMagnetApi.demo.dto.usuario.request.UpdateEmailAndUsernameDTO;
+import com.moneyMagnetApi.demo.dto.usuario.request.UpdateEmailDTO;
+import com.moneyMagnetApi.demo.dto.usuario.request.UpdatePasswordDTO;
+import com.moneyMagnetApi.demo.dto.usuario.request.UpdateThemeDTO;
+import com.moneyMagnetApi.demo.dto.usuario.request.UpdateUsernameDTO;
+import com.moneyMagnetApi.demo.dto.usuario.response.UsuarioResponseDTO;
 import com.moneyMagnetApi.demo.exception.BusinessException;
 import com.moneyMagnetApi.demo.repository.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -105,6 +106,15 @@ public class UsuarioService {
 
         String novaSenhaHash = passwordEncoder.encode(dto.password());
         usuario.setPassword(novaSenhaHash);
+    }
+
+    @Transactional
+    public UsuarioResponseDTO updateTheme(UUID id, UpdateThemeDTO dto) {
+        Usuario usuario = findUsuarioOrThrow(id);
+
+        usuario.setTheme(dto.theme());
+
+        return UsuarioResponseDTO.fromUsuario(usuario);
     }
 
     @Transactional

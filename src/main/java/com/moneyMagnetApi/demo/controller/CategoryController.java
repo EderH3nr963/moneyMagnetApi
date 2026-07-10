@@ -1,108 +1,107 @@
 package com.moneyMagnetApi.demo.controller;
 
-import com.moneyMagnetApi.demo.dto.request.CreateCategoryDTO;
-import com.moneyMagnetApi.demo.dto.request.UpdateCategoryDTO;
-import com.moneyMagnetApi.demo.dto.request.UpdateNameCategoryDTO;
-import com.moneyMagnetApi.demo.dto.request.UpdateTypeCategoryDTO;
-import com.moneyMagnetApi.demo.dto.response.CategoryResponseDTO;
+import com.moneyMagnetApi.demo.dto.category.request.CreateCategoryRequest;
+import com.moneyMagnetApi.demo.dto.category.request.UpdateCategoryRequest;
+import com.moneyMagnetApi.demo.dto.category.response.CategoryResponse;
 import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
-import com.moneyMagnetApi.demo.service.CategoryService;
+import com.moneyMagnetApi.demo.service.CategeoryService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/categories")
-@Tag(
-        name="Categoria",
-        description = "Rotas de manipulação de categorias"
-)
+@RequestMapping("/api/v1/categories")
+@RequiredArgsConstructor
+@Tag(name = "Categorias", description = "Consulta e manutencao de categorias do usuario")
 public class CategoryController {
 
-    private final CategoryService categoryService;
-
-    public CategoryController(CategoryService categoryService) {
-        this.categoryService = categoryService;
-    }
+    private final CategeoryService categoryService;
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public ResponseEntity<CategoryResponseDTO> createCategory(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails,
-            @RequestBody CreateCategoryDTO dto
+    @Operation(
+            summary = "Cria uma categoria",
+            description = "Cria uma categoria personalizada para o usuario autenticado.",
+            responses = {
+                    @ApiResponse(responseCode = "201", description = "Categoria criada"),
+                    @ApiResponse(responseCode = "400", description = "Dados invalidos"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public ResponseEntity<CategoryResponse> create(
+            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
+            @Valid @RequestBody CreateCategoryRequest request
     ) {
-        UUID usuarioId = userDetails.getId();
-        CategoryResponseDTO category = categoryService.create(usuarioId, dto);
-        return new ResponseEntity<>(category, HttpStatus.CREATED);
+        CategoryResponse category = categoryService.create(usuarioDetails.getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(category);
     }
 
     @GetMapping
-    public ResponseEntity<List<CategoryResponseDTO>> getAllCategories(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails
+    @Operation(
+            summary = "Lista categorias acessiveis",
+            description = "Retorna categorias padrao do sistema e categorias criadas pelo usuario.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Categorias retornadas"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public ResponseEntity<List<CategoryResponse>> findAll(
+            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails
     ) {
-        UUID usuarioId = userDetails.getId();
-        List<CategoryResponseDTO> categories = categoryService.getAll(usuarioId);
-        return ResponseEntity.ok(categories);
-    }
-
-    @GetMapping("/{categoryId}")
-    public ResponseEntity<CategoryResponseDTO> getCategoryById(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails,
-            @PathVariable UUID categoryId
-    ) {
-        UUID usuarioId = userDetails.getId();
-        CategoryResponseDTO category = categoryService.getById(usuarioId, categoryId);
-        return ResponseEntity.ok(category);
+        return ResponseEntity.ok(categoryService.getAll(usuarioDetails.getId()));
     }
 
     @PutMapping("/{categoryId}")
-    public ResponseEntity<CategoryResponseDTO> updateCategory(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails,
-            @PathVariable UUID categoryId,
-            @RequestBody UpdateCategoryDTO dto
+    @Operation(
+            summary = "Atualiza uma categoria",
+            description = "Atualiza nome, cor ou icone de uma categoria criada pelo usuario.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Categoria atualizada"),
+                    @ApiResponse(responseCode = "404", description = "Categoria nao encontrada"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public ResponseEntity<CategoryResponse> update(
+            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
+            @Parameter(description = "ID da categoria") @PathVariable UUID categoryId,
+            @Valid @RequestBody UpdateCategoryRequest request
     ) {
-        UUID usuarioId = userDetails.getId();
-        CategoryResponseDTO category = categoryService.update(usuarioId, categoryId, dto);
-        return ResponseEntity.ok(category);
-    }
-
-
-    @PatchMapping("/{categoryId}/name")
-    public ResponseEntity<CategoryResponseDTO> updateCategoryName(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails,
-            @PathVariable UUID categoryId,
-            @RequestBody UpdateNameCategoryDTO dto
-    ) {
-        UUID usuarioId = userDetails.getId();
-        CategoryResponseDTO category = categoryService.updateName(usuarioId, categoryId, dto);
-        return ResponseEntity.ok(category);
-    }
-
-    @PatchMapping("/{categoryId}/type")
-    public ResponseEntity<CategoryResponseDTO> updateCategoryType(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails,
-            @PathVariable UUID categoryId,
-            @RequestBody UpdateTypeCategoryDTO dto
-    ) {
-        UUID usuarioId = userDetails.getId();
-        CategoryResponseDTO category = categoryService.updateType(usuarioId, categoryId, dto);
-        return ResponseEntity.ok(category);
+        return ResponseEntity.ok(
+                categoryService.update(usuarioDetails.getId(), categoryId, request)
+        );
     }
 
     @DeleteMapping("/{categoryId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteCategory(
-            @AuthenticationPrincipal UsuarioDetailsImpl userDetails,
-            @PathVariable UUID categoryId
+    @Operation(
+            summary = "Remove uma categoria",
+            responses = {
+                    @ApiResponse(responseCode = "204", description = "Categoria removida"),
+                    @ApiResponse(responseCode = "404", description = "Categoria nao encontrada"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
+            }
+    )
+    public void delete(
+            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
+            @Parameter(description = "ID da categoria") @PathVariable UUID categoryId
     ) {
-        UUID usuarioId = userDetails.getId();
-        categoryService.delete(usuarioId, categoryId);
+        categoryService.delete(usuarioDetails.getId(), categoryId);
     }
 }

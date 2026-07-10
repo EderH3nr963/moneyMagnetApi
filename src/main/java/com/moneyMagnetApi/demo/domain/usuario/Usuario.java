@@ -1,73 +1,97 @@
 package com.moneyMagnetApi.demo.domain.usuario;
 
+import com.moneyMagnetApi.demo.domain.auditLog.AuditLog;
 import com.moneyMagnetApi.demo.domain.category.Category;
-import com.moneyMagnetApi.demo.domain.transaction.Transaction;
-import jakarta.persistence.*;
-import org.hibernate.annotations.*;
+import com.moneyMagnetApi.demo.domain.item.Item;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Entity(name = "usuario")
-@SQLDelete(sql = "UPDATE Usuario SET deleted = true, email = (usuario.email || '#deleted_' || usuario.id), username  = (usuario.username || '#deleted_' || usuario.id)  WHERE id = ?")
+@Entity
+@Table(name = "usuarios")
+@SQLDelete(sql = """
+    UPDATE usuarios
+    SET deleted = true,
+        email = CONCAT(email, '#deleted_', id),
+        username = CONCAT(username, '#deleted_', id)
+    WHERE id = ?
+    """)
 @SQLRestriction("deleted = false")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Usuario {
+    
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Column(nullable = false, unique = true)
+    
+    @Column(nullable = false, unique = true, length = 80)
     private String username;
-
-    @Column(nullable = false, unique = true)
+    
+    @Column(nullable = false, unique = true, length = 160)
     private String email;
-
+    
     @Column(nullable = false)
     private String password;
-
-    @Enumerated(EnumType.STRING)
+    
     @Column(nullable = false)
+    @Builder.Default
+    private UsuarioTheme theme = UsuarioTheme.DARK;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
     private UsuarioRole role;
+    
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<Category> categories = new ArrayList<>();
+    
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<Item> items = new ArrayList<>();
+    
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<AuditLog> auditLogs = new ArrayList<>();
+    
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<PasswordResetToken> passwordResetTokens = new ArrayList<>();
+    
 
     @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
+    
     @UpdateTimestamp
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
-    private List<Category> categories;
-
-    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
-    private List<Transaction> transactions;
-
-    private boolean deleted;
-
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
-
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
-
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
-
-    public UsuarioRole getRole() { return role; }
-    public void setRole(UsuarioRole role) { this.role = role; }
-
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-
-    public List<Category> getCategories() { return categories; }
-    public void setCategories(List<Category> categories) { this.categories = categories; }
-
-    public List<Transaction> getTransactions() { return transactions; }
-    public void setTransactions(List<Transaction> transactions) { this.transactions = transactions; }
+    
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
 }
