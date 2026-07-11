@@ -87,7 +87,8 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private String recoverToken(HttpServletRequest request) {
         var authHeader = request.getHeader("authorization");
-        if (authHeader == null) return null;
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) return null;
+        
         return authHeader.substring(7);
     }
 }

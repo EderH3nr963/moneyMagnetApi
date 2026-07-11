@@ -122,7 +122,7 @@ public class AuthorizationController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/reset-password/{token}")
+    @PostMapping("/reset-password")
     @SecurityRequirements
     @Operation(
             summary = "Redefine a senha",
@@ -134,10 +134,9 @@ public class AuthorizationController {
             }
     )
     public ResponseEntity<Void> resetPassword(
-            @Valid @RequestBody ResetPasswordDTO dto,
-            @Parameter(description = "Token de redefinicao recebido por e-mail") @PathVariable String token
+            @Valid @RequestBody ResetPasswordDTO dto
     ) {
-        authorizationService.resetPassword(token, dto);
+        authorizationService.resetPassword(dto);
 
         return ResponseEntity.noContent().build();
     }

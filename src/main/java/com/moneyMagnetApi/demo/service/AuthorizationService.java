@@ -160,8 +160,8 @@ public class AuthorizationService {
     }
 
     @Transactional
-    public void resetPassword(String token, ResetPasswordDTO dto) {
-        PasswordResetToken resetToken = tokenRepository.findByTokenHash(hashToken(token))
+    public void resetPassword(ResetPasswordDTO dto) {
+        PasswordResetToken resetToken = tokenRepository.findByTokenHash(hashToken(dto.token()))
                 .orElseThrow(() -> new EntityNotFoundException("Token inválido ou expirado!"));
 
         // Validações

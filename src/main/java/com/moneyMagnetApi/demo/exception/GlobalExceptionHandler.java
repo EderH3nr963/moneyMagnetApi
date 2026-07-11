@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mail.MailSendException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -22,6 +24,8 @@ import java.time.LocalDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     private ResponseEntity<ApiError> buildError(
             HttpStatus status,
             String message,
@@ -31,11 +35,22 @@ public class GlobalExceptionHandler {
                 status.value(),
                 status.getReasonPhrase(),
                 message,
-                request.getRequestURI(),
+                safeRequestPath(request),
                 LocalDateTime.now()
         );
 
         return ResponseEntity.status(status).body(error);
+    }
+
+    private String safeRequestPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String resetPasswordPrefix = "/api/v1/auth/reset-password/";
+
+        if (path.startsWith(resetPasswordPrefix)) {
+            return resetPasswordPrefix + "{token}";
+        }
+
+        return path;
     }
 
     // 404 - Entidade não encontrada
@@ -74,7 +89,8 @@ public class GlobalExceptionHandler {
             ConstraintViolationException ex,
             HttpServletRequest request
     ) {
-        return buildError(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        LOGGER.debug("Violacao de restricao na requisicao {}", safeRequestPath(request), ex);
+        return buildError(HttpStatus.BAD_REQUEST, "Parametros invalidos", request);
     }
 
     // 403 - Acesso negado
@@ -92,7 +108,7 @@ public class GlobalExceptionHandler {
             MailSendException ex,
             HttpServletRequest request
     ) {
-        System.out.println(ex.getMessage());
+        LOGGER.error("Erro ao enviar email na requisicao {}", safeRequestPath(request), ex);
         return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Erro ao enviar email",
                 request);
@@ -140,9 +156,10 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException ex,
             HttpServletRequest request
     ){
+        LOGGER.debug("Corpo de requisicao invalido em {}", safeRequestPath(request), ex);
         return buildError(
                 HttpStatus.BAD_REQUEST,
-                ex.getMessage(),
+                "Corpo da requisicao invalido",
                 request
         );
     }
@@ -152,21 +169,23 @@ public class GlobalExceptionHandler {
             JsonParseException ex,
             HttpServletRequest request
     ) {
+        LOGGER.debug("JSON invalido em {}", safeRequestPath(request), ex);
         return buildError(
                 HttpStatus.BAD_REQUEST,
-                ex.getMessage(),
+                "JSON invalido",
                 request
         );
     }
     
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgumentException(
-            JsonParseException ex,
+            IllegalArgumentException ex,
             HttpServletRequest request
     ) {
+        LOGGER.debug("Argumento invalido em {}", safeRequestPath(request), ex);
         return buildError(
                 HttpStatus.BAD_REQUEST,
-                ex.getMessage(),
+                "Argumento invalido",
                 request
         );
     }
@@ -176,7 +195,7 @@ public class GlobalExceptionHandler {
             Exception ex,
             HttpServletRequest request
     ) {
-        System.out.println(ex.getClass().getName());
+        LOGGER.error("Erro interno nao tratado em {}", safeRequestPath(request), ex);
         return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Erro interno no servidor",
                 request);
