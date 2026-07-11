@@ -35,8 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -56,8 +60,9 @@ public class AuthorizationService {
     private final TransactionRepository transactionRepository;
     private final CategoryRepository categoryRepository;
     private final Cache<String, Item> itemByUserAndIdCache;
+    private final RefreshTokenService refreshTokenService;
 
-    private AuthorizationResponseDTO authenticateAndGenerateResponse(
+    private AuthenticatedSession authenticateAndGenerateResponse(
             String email,
             String password
     ) {
@@ -65,19 +70,24 @@ public class AuthorizationService {
         var auth = authenticationManager.authenticate(authToken);
 
         UsuarioDetailsImpl details = (UsuarioDetailsImpl) auth.getPrincipal();
-        Instant expiresAt = Instant.now().plusMillis(1000 * 60 * 60 * 48); // 48h
+        Instant expiresAt = Instant.now().plus(1, ChronoUnit.HOURS);
         String token = tokenService.generateToken(details, expiresAt);
 
         Usuario usuario = details.getUsuario();
-        return new AuthorizationResponseDTO(expiresAt ,token, UsuarioResponseDTO.fromUsuario(usuario));
+        RefreshTokenService.IssuedRefreshToken refreshToken = refreshTokenService.issue(usuario);
+        return new AuthenticatedSession(
+                new AuthorizationResponseDTO(expiresAt, token, UsuarioResponseDTO.fromUsuario(usuario)),
+                refreshToken.rawToken(),
+                refreshToken.expiresAt()
+        );
     }
 
-    public AuthorizationResponseDTO login(LoginRequestDTO dto) {
+    public AuthenticatedSession login(LoginRequestDTO dto) {
         return authenticateAndGenerateResponse(dto.email(), dto.password());
     }
 
     @Transactional
-    public AuthorizationResponseDTO register(RegisterRequestDTO dto) {
+    public AuthenticatedSession register(RegisterRequestDTO dto) {
         if (usuarioRepository.existsByEmail(dto.email())) {
             throw new BusinessException("Email já cadastrado", HttpStatus.CONFLICT);
         }
@@ -102,23 +112,24 @@ public class AuthorizationService {
     @Transactional
     public void forgotPassword(ForgotPasswordDTO dto) {
 
-        Usuario usuario = usuarioRepository.findByEmail(dto.email())
-                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
-
+        Usuario usuario = usuarioRepository.findByEmail(dto.email()).orElse(null);
+        
+        if  (usuario == null) {
+            return;
+        }
+        
         tokenRepository.deleteByUsuario(usuario);
 
         String token = TokenGenerator.generateToken(32);
         Instant expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES);
 
         PasswordResetToken resetToken = new PasswordResetToken();
-        resetToken.setToken(token);
+        resetToken.setTokenHash(hashToken(token));
         resetToken.setUsuario(usuario);
         resetToken.setExpiresAt(expiresAt);
         tokenRepository.save(resetToken);
 
         String resetLink = baseFrontUrl + "/reset-password#token=" + token;
-
-        System.out.println("Enviar email para " + usuario.getEmail() + " com link: " + resetLink);
 
         try (InputStream inputStream = getClass()
                 .getClassLoader()
@@ -150,7 +161,7 @@ public class AuthorizationService {
 
     @Transactional
     public void resetPassword(String token, ResetPasswordDTO dto) {
-        PasswordResetToken resetToken = tokenRepository.findByToken(token)
+        PasswordResetToken resetToken = tokenRepository.findByTokenHash(hashToken(token))
                 .orElseThrow(() -> new EntityNotFoundException("Token inválido ou expirado!"));
 
         // Validações
@@ -169,6 +180,8 @@ public class AuthorizationService {
         // Atualiza a senha do usuário
         Usuario usuario = resetToken.getUsuario();
         usuario.setPassword(passwordEncoder.encode(dto.password()));
+        usuario.setTokenVersion(usuario.getTokenVersion() + 1);
+        refreshTokenService.revokeAll(usuario);
         usuarioRepository.save(usuario);
 
         // Marca o token como usado
@@ -202,4 +215,45 @@ public class AuthorizationService {
     private String cacheKey(UUID userId, UUID resourceId) {
         return userId + ":" + resourceId;
     }
+
+    private String hashToken(String rawToken) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 indisponivel.", exception);
+        }
+    }
+
+    @Transactional
+    public AuthenticatedSession refresh(String rawRefreshToken) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            throw new BusinessException("Refresh token ausente.", HttpStatus.UNAUTHORIZED);
+        }
+        RefreshTokenService.RotatedRefreshToken rotated = refreshTokenService.rotate(rawRefreshToken);
+        Usuario usuario = rotated.usuario();
+        Instant expiresAt = Instant.now().plus(1, ChronoUnit.HOURS);
+        String accessToken = tokenService.generateToken(new UsuarioDetailsImpl(usuario), expiresAt);
+
+        return new AuthenticatedSession(
+                new AuthorizationResponseDTO(
+                        expiresAt,
+                        accessToken,
+                        UsuarioResponseDTO.fromUsuario(usuario)
+                ),
+                rotated.rawToken(),
+                rotated.expiresAt()
+        );
+    }
+
+    public void logout(String rawRefreshToken) {
+        refreshTokenService.revoke(rawRefreshToken);
+    }
+
+    public record AuthenticatedSession(
+            AuthorizationResponseDTO authorization,
+            String refreshToken,
+            Instant refreshTokenExpiresAt
+    ) {}
 }

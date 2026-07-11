@@ -93,6 +93,23 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
             @Param("natures") List<TransactionNature> natures,
             Pageable pageable
     );
+
+    @Query("""
+    select t
+    from Transaction t
+    where t.account.item.usuario.id = :userId
+      and t.account.item.id = :itemId
+      and t.account.type = :accountType
+      and t.nature in :natures
+    """)
+    @EntityGraph(attributePaths = {"account", "category"})
+    Page<Transaction> findAllByUserAndItemAndAccountType(
+            @Param("userId") UUID userId,
+            @Param("itemId") UUID itemId,
+            @Param("accountType") AccountType accountType,
+            @Param("natures") List<TransactionNature> natures,
+            Pageable pageable
+    );
     List<Transaction> findAllByAccountAndNatureIn(
             Account account,
             List<TransactionNature> natures

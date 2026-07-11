@@ -1,6 +1,7 @@
 package com.moneyMagnetApi.demo.exception;
 
 import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.fasterxml.jackson.core.JsonParseException;
 import com.moneyMagnetApi.demo.dto.usuario.response.ApiError;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +9,7 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ValidationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mail.MailSendException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -90,6 +92,7 @@ public class GlobalExceptionHandler {
             MailSendException ex,
             HttpServletRequest request
     ) {
+        System.out.println(ex.getMessage());
         return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Erro ao enviar email",
                 request);
@@ -131,13 +134,49 @@ public class GlobalExceptionHandler {
                 request
         );
     }
+    
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ){
+        return buildError(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage(),
+                request
+        );
+    }
+    
+    @ExceptionHandler(JsonParseException.class)
+    public ResponseEntity<ApiError> handleJsonParseException(
+            JsonParseException ex,
+            HttpServletRequest request
+    ) {
+        return buildError(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage(),
+                request
+        );
+    }
+    
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgumentException(
+            JsonParseException ex,
+            HttpServletRequest request
+    ) {
+        return buildError(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage(),
+                request
+        );
+    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(
             Exception ex,
             HttpServletRequest request
     ) {
-        System.out.println(ex.getMessage());
+        System.out.println(ex.getClass().getName());
         return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Erro interno no servidor",
                 request);

@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -57,6 +58,11 @@ public class Usuario {
     
     @Column(nullable = false)
     private String password;
+
+    @Column(name = "token_version", nullable = false)
+    @ColumnDefault("0")
+    @Builder.Default
+    private long tokenVersion = 0;
     
     @Column(nullable = false)
     @Builder.Default
@@ -81,6 +87,10 @@ public class Usuario {
     @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
     @Builder.Default
     private List<PasswordResetToken> passwordResetTokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<RefreshToken> refreshTokens = new ArrayList<>();
     
 
     @CreationTimestamp

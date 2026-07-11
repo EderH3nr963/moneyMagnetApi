@@ -100,7 +100,9 @@ public class TransactionSyncService {
                 if (category == null) {
                     category = mapCategories.get("99999999");
                 }
+                
 
+                
                 Category merchantCategory =
                         merchantCategoryRuleService.resolveCategoryForMerchant(
                                 merchantRules,

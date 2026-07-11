@@ -20,6 +20,7 @@ public class TokenService {
             Algorithm algorithm = Algorithm.HMAC256(secret);
             String token = JWT.create()
                     .withSubject(usuarioDetails.getId().toString())
+                    .withClaim("tokenVersion", usuarioDetails.getUsuario().getTokenVersion())
                     .withExpiresAt(expiration) // 48h
                     .withIssuer("api")
                     .sign(algorithm);
@@ -30,15 +31,24 @@ public class TokenService {
         }
     }
 
-    public UUID validateToken(String token) {
+    public ValidatedToken validateToken(String token) {
             Algorithm algorithm = Algorithm.HMAC256(secret);
-            String id = JWT
+            var decodedToken = JWT
                     .require(algorithm)
                     .withIssuer("api")
                     .build()
-                    .verify(token)
-                    .getSubject();
+                    .verify(token);
 
-            return UUID.fromString(id);
+            Long tokenVersion = decodedToken.getClaim("tokenVersion").asLong();
+            if (tokenVersion == null) {
+                throw new JWTVerificationException("Token sem versao de sessao.");
+            }
+
+            return new ValidatedToken(
+                    UUID.fromString(decodedToken.getSubject()),
+                    tokenVersion
+            );
     }
+
+    public record ValidatedToken(UUID userId, long tokenVersion) {}
 }

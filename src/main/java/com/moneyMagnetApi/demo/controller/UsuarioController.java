@@ -1,10 +1,8 @@
 package com.moneyMagnetApi.demo.controller;
 
 import com.moneyMagnetApi.demo.dto.usuario.request.UpdateEmailAndUsernameDTO;
-import com.moneyMagnetApi.demo.dto.usuario.request.UpdateEmailDTO;
 import com.moneyMagnetApi.demo.dto.usuario.request.UpdatePasswordDTO;
 import com.moneyMagnetApi.demo.dto.usuario.request.UpdateThemeDTO;
-import com.moneyMagnetApi.demo.dto.usuario.request.UpdateUsernameDTO;
 import com.moneyMagnetApi.demo.dto.usuario.response.UsuarioResponseDTO;
 import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
 import com.moneyMagnetApi.demo.service.UsuarioService;
@@ -60,42 +58,6 @@ public class UsuarioController {
             @RequestBody @Valid UpdateEmailAndUsernameDTO dto
     ) {
         UsuarioResponseDTO responseDTO = usuarioService.updateEmailAndUsername(usuarioDetails.getId(), dto);
-
-        return ResponseEntity.ok().body(responseDTO);
-    }
-
-    @PatchMapping("/email")
-    @Operation(
-            summary = "Atualiza o e-mail do usuario",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "E-mail atualizado"),
-                    @ApiResponse(responseCode = "400", description = "Dados invalidos"),
-                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
-            }
-    )
-    public ResponseEntity<UsuarioResponseDTO> updateEmail(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @RequestBody @Valid UpdateEmailDTO dto
-    ) {
-        UsuarioResponseDTO responseDTO = usuarioService.updateEmail(usuarioDetails.getId(), dto);
-
-        return ResponseEntity.ok().body(responseDTO);
-    }
-
-    @PatchMapping("/username")
-    @Operation(
-            summary = "Atualiza o nome de usuario",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Nome atualizado"),
-                    @ApiResponse(responseCode = "400", description = "Dados invalidos"),
-                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
-            }
-    )
-    public ResponseEntity<UsuarioResponseDTO> updateUsername(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @RequestBody @Valid UpdateUsernameDTO dto
-    ) {
-        UsuarioResponseDTO responseDTO = usuarioService.updateUsername(usuarioDetails.getId(), dto);
 
         return ResponseEntity.ok().body(responseDTO);
     }

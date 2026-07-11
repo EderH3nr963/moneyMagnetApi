@@ -14,13 +14,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -71,48 +69,6 @@ public class TransactionController {
         );
     }
     
-    @GetMapping("/{transactionId}")
-    @Operation(
-            summary = "Busca uma transacao por ID",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Transacao encontrada"),
-                    @ApiResponse(responseCode = "404", description = "Transacao nao encontrada"),
-                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
-            }
-    )
-    public ResponseEntity<TransactionResponse> findById(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @Parameter(description = "ID da transacao") @PathVariable UUID transactionId
-    ) {
-        
-        UUID userId = usuarioDetails.getId();
-        
-        return ResponseEntity.ok(
-                transactionService.findById(userId, transactionId)
-        );
-    }
-    
-    @GetMapping("/account/{accountId}")
-    @Operation(
-            summary = "Lista transacoes de uma conta",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Transacoes retornadas"),
-                    @ApiResponse(responseCode = "404", description = "Conta nao encontrada"),
-                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
-            }
-    )
-    public ResponseEntity<List<TransactionResponse>> findByAccount(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @Parameter(description = "ID da conta") @PathVariable UUID accountId
-    ) {
-        
-        UUID userId = usuarioDetails.getId();
-        
-        return ResponseEntity.ok(
-                transactionService.findByAccount(userId, accountId)
-        );
-    }
-    
     @PutMapping("/{transactionId}")
     @Operation(
             summary = "Atualiza dados editaveis de uma transacao",
@@ -142,26 +98,6 @@ public class TransactionController {
                         categoryId
                 )
         );
-    }
-    
-    @DeleteMapping("/{transactionId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(
-            summary = "Remove uma transacao",
-            responses = {
-                    @ApiResponse(responseCode = "204", description = "Transacao removida"),
-                    @ApiResponse(responseCode = "404", description = "Transacao nao encontrada"),
-                    @ApiResponse(responseCode = "401", description = "Token ausente ou invalido")
-            }
-    )
-    public void delete(
-            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
-            @Parameter(description = "ID da transacao") @PathVariable UUID transactionId
-    ) {
-        
-        UUID userId = usuarioDetails.getId();
-        
-        transactionService.delete(userId, transactionId);
     }
     
 }

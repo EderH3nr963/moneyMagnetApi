@@ -14,8 +14,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -35,10 +33,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0]; // pega o primeiro IP real
-        }
+        // Cabeçalhos como X-Forwarded-For são controláveis pelo cliente.
+        // O proxy reverso deve limitar o acesso direto à aplicação e repassar
+        // o IP confiável como endereço remoto da conexão.
         return request.getRemoteAddr();
     }
 

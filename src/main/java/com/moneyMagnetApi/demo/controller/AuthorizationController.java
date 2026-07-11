@@ -11,8 +11,13 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.ResponseCookie;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,12 +25,20 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
+import java.time.Instant;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @Tag(name = "Autorizacao", description = "Cadastro, login e recuperacao de senha")
 public class AuthorizationController {
 
+    private static final String REFRESH_COOKIE = "money_magnet_refresh";
+
     private final AuthorizationService authorizationService;
+
+    @Value("${api.security.refresh-token.cookie-secure:true}")
+    private boolean secureCookie;
 
     public AuthorizationController(AuthorizationService authorizationService) {
         this.authorizationService = authorizationService;
@@ -45,11 +58,11 @@ public class AuthorizationController {
             }
     )
     public ResponseEntity<AuthorizationResponseDTO> register(
-            @RequestBody RegisterRequestDTO dto
+            @Valid @RequestBody RegisterRequestDTO dto
     ) {
-        AuthorizationResponseDTO response = authorizationService.register(dto);
+        AuthorizationService.AuthenticatedSession session = authorizationService.register(dto);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return sessionResponse(session, HttpStatus.CREATED);
     }
 
     @PostMapping("/login")
@@ -64,11 +77,31 @@ public class AuthorizationController {
             }
     )
     public ResponseEntity<AuthorizationResponseDTO> login(
-            @RequestBody LoginRequestDTO dto
+            @Valid @RequestBody LoginRequestDTO dto
     ) {
-        AuthorizationResponseDTO response = authorizationService.login(dto);
+        AuthorizationService.AuthenticatedSession session = authorizationService.login(dto);
 
-        return ResponseEntity.ok().body(response);
+        return sessionResponse(session, HttpStatus.OK);
+    }
+
+    @PostMapping("/refresh")
+    @SecurityRequirements
+    public ResponseEntity<AuthorizationResponseDTO> refresh(
+            @CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken
+    ) {
+        AuthorizationService.AuthenticatedSession session = authorizationService.refresh(refreshToken);
+        return sessionResponse(session, HttpStatus.OK);
+    }
+
+    @PostMapping("/logout")
+    @SecurityRequirements
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken
+    ) {
+        authorizationService.logout(refreshToken);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString())
+                .build();
     }
 
     @PostMapping("/forgot-password")
@@ -82,7 +115,7 @@ public class AuthorizationController {
             }
     )
     public ResponseEntity<Void> forgotPassword(
-            @RequestBody ForgotPasswordDTO dto
+            @Valid @RequestBody ForgotPasswordDTO dto
     ) {
         authorizationService.forgotPassword(dto);
 
@@ -101,11 +134,38 @@ public class AuthorizationController {
             }
     )
     public ResponseEntity<Void> resetPassword(
-            @RequestBody ResetPasswordDTO dto,
+            @Valid @RequestBody ResetPasswordDTO dto,
             @Parameter(description = "Token de redefinicao recebido por e-mail") @PathVariable String token
     ) {
         authorizationService.resetPassword(token, dto);
 
         return ResponseEntity.noContent().build();
+    }
+
+    private ResponseEntity<AuthorizationResponseDTO> sessionResponse(
+            AuthorizationService.AuthenticatedSession session,
+            HttpStatus status
+    ) {
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE, session.refreshToken())
+                .httpOnly(true)
+                .secure(secureCookie)
+                .sameSite("Strict")
+                .path("/api/v1/auth")
+                .maxAge(Duration.between(Instant.now(), session.refreshTokenExpiresAt()))
+                .build();
+
+        return ResponseEntity.status(status)
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(session.authorization());
+    }
+
+    private ResponseCookie clearRefreshCookie() {
+        return ResponseCookie.from(REFRESH_COOKIE, "")
+                .httpOnly(true)
+                .secure(secureCookie)
+                .sameSite("Strict")
+                .path("/api/v1/auth")
+                .maxAge(0)
+                .build();
     }
 }

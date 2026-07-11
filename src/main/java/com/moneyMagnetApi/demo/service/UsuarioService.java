@@ -23,13 +23,16 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
 
     public UsuarioService(
             UsuarioRepository usuarioRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            RefreshTokenService refreshTokenService
     ) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +109,8 @@ public class UsuarioService {
 
         String novaSenhaHash = passwordEncoder.encode(dto.password());
         usuario.setPassword(novaSenhaHash);
+        usuario.setTokenVersion(usuario.getTokenVersion() + 1);
+        refreshTokenService.revokeAll(usuario);
     }
 
     @Transactional
