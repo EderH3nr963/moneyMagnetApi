@@ -1,6 +1,7 @@
 package com.moneyMagnetApi.demo.controller;
 
 import com.moneyMagnetApi.demo.dto.usuario.request.UpdateEmailAndUsernameDTO;
+import com.moneyMagnetApi.demo.dto.usuario.request.UpdateEmailDTO;
 import com.moneyMagnetApi.demo.dto.usuario.request.UpdatePasswordDTO;
 import com.moneyMagnetApi.demo.dto.usuario.request.UpdateThemeDTO;
 import com.moneyMagnetApi.demo.dto.usuario.response.UsuarioResponseDTO;
@@ -77,6 +78,25 @@ public class UsuarioController {
     ) {
         usuarioService.updatePassword(usuarioDetails.getId(), dto);
 
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/email/request-change-email")
+    @Operation(
+            summary = "Solicita a alteração do e-mail",
+            description = "Salva uma solicitação temporária e envia a confirmação ao novo e-mail.",
+            responses = {
+                    @ApiResponse(responseCode = "204", description = "Confirmação enviada"),
+                    @ApiResponse(responseCode = "400", description = "E-mail inválido"),
+                    @ApiResponse(responseCode = "401", description = "Token ausente ou inválido"),
+                    @ApiResponse(responseCode = "409", description = "E-mail já está em uso")
+            }
+    )
+    public ResponseEntity<Void> requestEmailUpdate(
+            @AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails,
+            @RequestBody @Valid UpdateEmailDTO dto
+    ) {
+        usuarioService.requestEmailUpdate(usuarioDetails.getId(), dto);
         return ResponseEntity.noContent().build();
     }
 

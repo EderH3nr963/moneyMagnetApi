@@ -1,6 +1,7 @@
 package com.moneyMagnetApi.demo.controller;
 
 import com.moneyMagnetApi.demo.dto.transaction.response.TransactionResponse;
+import com.moneyMagnetApi.demo.exception.BusinessException;
 import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
 import com.moneyMagnetApi.demo.service.TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -59,6 +61,9 @@ public class TransactionController {
             )
             Pageable pageable
     ) {
+        if (pageable.getPageSize() > 50)
+            throw new BusinessException("Tamanho máximo de paginação é de 50", HttpStatus.BAD_REQUEST);
+        
         return ResponseEntity.ok(
                 transactionService.findAll(
                         usuarioDetails.getId(),

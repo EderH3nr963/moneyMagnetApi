@@ -1,32 +1,34 @@
 package com.moneyMagnetApi.demo.controller;
 
-import com.moneyMagnetApi.demo.dto.auth.request.ForgotPasswordDTO;
-import com.moneyMagnetApi.demo.dto.auth.request.LoginRequestDTO;
-import com.moneyMagnetApi.demo.dto.auth.request.RegisterRequestDTO;
-import com.moneyMagnetApi.demo.dto.auth.request.ResetPasswordDTO;
-import com.moneyMagnetApi.demo.dto.auth.response.AuthorizationResponseDTO;
-import com.moneyMagnetApi.demo.service.AuthorizationService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.ResponseCookie;
+import java.time.Duration;
+import java.time.Instant;
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
-import java.time.Instant;
+import com.moneyMagnetApi.demo.dto.auth.request.ForgotPasswordDTO;
+import com.moneyMagnetApi.demo.dto.auth.request.LoginRequestDTO;
+import com.moneyMagnetApi.demo.dto.auth.request.RegisterRequestDTO;
+import com.moneyMagnetApi.demo.dto.auth.request.ResetPasswordDTO;
+import com.moneyMagnetApi.demo.dto.auth.response.AuthorizationResponseDTO;
+import com.moneyMagnetApi.demo.dto.usuario.request.ConfirmEmailDTO;
+import com.moneyMagnetApi.demo.service.AuthorizationService;
+import com.moneyMagnetApi.demo.service.UsuarioService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -36,12 +38,14 @@ public class AuthorizationController {
     private static final String REFRESH_COOKIE = "money_magnet_refresh";
 
     private final AuthorizationService authorizationService;
+    private final UsuarioService usuarioService;
 
     @Value("${api.security.refresh-token.cookie-secure:true}")
     private boolean secureCookie;
 
-    public AuthorizationController(AuthorizationService authorizationService) {
+    public AuthorizationController(AuthorizationService authorizationService, UsuarioService usuarioService) {
         this.authorizationService = authorizationService;
+        this.usuarioService = usuarioService;
     }
 
     @PostMapping("/register")
@@ -138,6 +142,23 @@ public class AuthorizationController {
     ) {
         authorizationService.resetPassword(dto);
 
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/confirm-email")
+    @SecurityRequirements
+    @Operation(
+            summary = "Confirma a alteração do e-mail",
+            description = "Valida o token enviado ao novo endereço e efetiva a alteração.",
+            responses = {
+                    @ApiResponse(responseCode = "204", description = "E-mail atualizado"),
+                    @ApiResponse(responseCode = "400", description = "Token expirado ou já utilizado"),
+                    @ApiResponse(responseCode = "404", description = "Token inválido"),
+                    @ApiResponse(responseCode = "409", description = "E-mail já está em uso")
+            }
+    )
+    public ResponseEntity<Void> confirmEmail(@Valid @RequestBody ConfirmEmailDTO dto) {
+        usuarioService.confirmEmailUpdate(dto);
         return ResponseEntity.noContent().build();
     }
 

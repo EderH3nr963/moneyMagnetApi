@@ -129,7 +129,7 @@ public class AuthorizationService {
         resetToken.setExpiresAt(expiresAt);
         tokenRepository.save(resetToken);
 
-        String resetLink = baseFrontUrl + "/reset-password#token=" + token;
+        String resetLink = baseFrontUrl + "/auth/reset-password#token=" + token;
 
         try (InputStream inputStream = getClass()
                 .getClassLoader()
@@ -225,7 +225,7 @@ public class AuthorizationService {
             throw new IllegalStateException("SHA-256 indisponivel.", exception);
         }
     }
-
+    
     @Transactional
     public AuthenticatedSession refresh(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
@@ -235,7 +235,7 @@ public class AuthorizationService {
         Usuario usuario = rotated.usuario();
         Instant expiresAt = Instant.now().plus(1, ChronoUnit.HOURS);
         String accessToken = tokenService.generateToken(new UsuarioDetailsImpl(usuario), expiresAt);
-
+        
         return new AuthenticatedSession(
                 new AuthorizationResponseDTO(
                         expiresAt,

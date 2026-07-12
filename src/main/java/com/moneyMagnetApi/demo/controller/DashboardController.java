@@ -1,18 +1,9 @@
 package com.moneyMagnetApi.demo.controller;
 
-import com.moneyMagnetApi.demo.dto.dashboard.response.CategoryExpenseResponse;
-import com.moneyMagnetApi.demo.dto.dashboard.response.DashboardResponse;
-import com.moneyMagnetApi.demo.dto.dashboard.response.MonthlyFinancialResponse;
-import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
-import com.moneyMagnetApi.demo.service.DashboardService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,9 +11,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.YearMonth;
-import java.util.List;
-import java.util.UUID;
+import com.moneyMagnetApi.demo.dto.dashboard.response.CategoryExpenseResponse;
+import com.moneyMagnetApi.demo.dto.dashboard.response.DashboardResponse;
+import com.moneyMagnetApi.demo.dto.dashboard.response.MonthlyFinancialResponse;
+import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
+import com.moneyMagnetApi.demo.service.DashboardService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
