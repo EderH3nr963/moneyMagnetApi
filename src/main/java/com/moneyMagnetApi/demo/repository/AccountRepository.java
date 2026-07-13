@@ -16,6 +16,8 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     @EntityGraph(attributePaths = {"item", "item.institution"})
     Optional<Account> findByIdAndItemUsuarioId(UUID accountId, UUID userId);
 
+    Optional<Account> findByPluggyAccountId(String accountId);
+
     List<Account> findAllByItemIdAndPluggyAccountIdIn(UUID itemId, Collection<String> pluggyAccountIds);
 
     @Query(value = """
