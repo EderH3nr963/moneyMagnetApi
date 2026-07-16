@@ -58,6 +58,10 @@ public class AuditLogFilter extends OncePerRequestFilter {
             );
             String route = resolveRoute(request);
 
+            if (route == "/health") {
+                return;
+            }
+
             auditLogService.save(new AuditLogEntry(
                     resolveUserId(),
                     request.getMethod(),
