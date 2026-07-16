@@ -1,5 +1,8 @@
 package com.moneyMagnetApi.demo.service;
 
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.stereotype.Service;
 
 import com.moneyMagnetApi.demo.domain.account.Account;
@@ -25,8 +28,13 @@ public class WebHookService {
     Item item = itemRepository.findByPluggyItemId(dto.itemId()).orElseThrow(
       () -> new EntityNotFoundException("Item não foi achado")
     );
+    List<Account> accounts = accountRepository.findAllByItemId(item.getId());
 
-    accountSyncService.syncItem(item.getUsuario().getId(), item.getId());
+    accountSyncService.syncItem(UUID.fromString(dto.clientUserId()), item.getId());
+
+    for (Account account: accounts) {
+      transactionSyncService.syncTransactions(account);
+    }
   }
 
   public void transactionCreated(TransactionCreatedDTO dto) {

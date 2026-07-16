@@ -18,187 +18,180 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    private ResponseEntity<ApiError> buildError(
-            HttpStatus status,
-            String message,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                status.value(),
-                status.getReasonPhrase(),
-                message,
-                safeRequestPath(request),
-                LocalDateTime.now()
-        );
+        private ResponseEntity<ApiError> buildError(
+                        HttpStatus status,
+                        String message,
+                        HttpServletRequest request) {
+                ApiError error = new ApiError(
+                                status.value(),
+                                status.getReasonPhrase(),
+                                message,
+                                safeRequestPath(request),
+                                LocalDateTime.now());
 
-        return ResponseEntity.status(status).body(error);
-    }
-
-    private String safeRequestPath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String resetPasswordPrefix = "/api/v1/auth/reset-password/";
-
-        if (path.startsWith(resetPasswordPrefix)) {
-            return resetPasswordPrefix + "{token}";
+                return ResponseEntity.status(status).body(error);
         }
 
-        return path;
-    }
+        private String safeRequestPath(HttpServletRequest request) {
+                String path = request.getRequestURI();
+                String resetPasswordPrefix = "/api/v1/auth/reset-password/";
 
-    // 404 - Entidade não encontrada
-    @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<ApiError> handleEntityNotFound(
-            EntityNotFoundException ex,
-            HttpServletRequest request
-    ) {
-        return buildError(HttpStatus.NOT_FOUND, ex.getMessage(), request);
-    }
+                if (path.startsWith(resetPasswordPrefix)) {
+                        return resetPasswordPrefix + "{token}";
+                }
 
-    // 400 - Erro de validação (@Valid)
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidation(
-            MethodArgumentNotValidException ex,
-            HttpServletRequest request
-    ) {
-        String message = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .findFirst()
-                .orElse("Erro de validação");
+                return path;
+        }
 
-        return buildError(HttpStatus.BAD_REQUEST, message, request);
-    }
+        @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+        public ResponseEntity<ApiError> handleTypeMismatch(
+                        MethodArgumentTypeMismatchException ex,
+                        HttpServletRequest request) {
+                String expectedType = ex.getRequiredType() != null
+                                ? ex.getRequiredType().getSimpleName()
+                                : "tipo válido";
 
-    @ExceptionHandler(ValidationException.class)
-    public ResponseEntity<ApiError> handleValidationException(ValidationException ex, HttpServletRequest request) {
-        return buildError(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
-    }
+                return buildError(HttpStatus.BAD_REQUEST,
+                                "O parâmetro '%s' deve ser do tipo %s".formatted(ex.getName(), expectedType), request);
+        }
 
-    // 400 - ConstraintViolation
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiError> handleConstraintViolation(
-            ConstraintViolationException ex,
-            HttpServletRequest request
-    ) {
-        LOGGER.debug("Violacao de restricao na requisicao {}", safeRequestPath(request), ex);
-        return buildError(HttpStatus.BAD_REQUEST, "Parametros invalidos", request);
-    }
+        // 404 - Entidade não encontrada
+        @ExceptionHandler(EntityNotFoundException.class)
+        public ResponseEntity<ApiError> handleEntityNotFound(
+                        EntityNotFoundException ex,
+                        HttpServletRequest request) {
+                return buildError(HttpStatus.NOT_FOUND, ex.getMessage(), request);
+        }
 
-    // 403 - Acesso negado
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiError> handleAccessDenied(
-            AccessDeniedException ex,
-            HttpServletRequest request
-    ) {
-        return buildError(HttpStatus.FORBIDDEN, "Acesso negado", request);
-    }
+        // 400 - Erro de validação (@Valid)
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        public ResponseEntity<ApiError> handleValidation(
+                        MethodArgumentNotValidException ex,
+                        HttpServletRequest request) {
+                String message = ex.getBindingResult()
+                                .getFieldErrors()
+                                .stream()
+                                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                                .findFirst()
+                                .orElse("Erro de validação");
 
-    // 500 - Erro ao enviar email
-    @ExceptionHandler(MailSendException.class)
-    public ResponseEntity<ApiError> handleMailError(
-            MailSendException ex,
-            HttpServletRequest request
-    ) {
-        LOGGER.error("Erro ao enviar email na requisicao {}", safeRequestPath(request), ex);
-        return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Erro ao enviar email",
-                request);
-    }
+                return buildError(HttpStatus.BAD_REQUEST, message, request);
+        }
 
-    // 401 - Qualquer outra exception
-    @ExceptionHandler(JWTVerificationException.class)
-    public ResponseEntity<ApiError> handleJWTVerification(
-            JWTVerificationException ex,
-            HttpServletRequest request
-    ) {
-        return buildError(
-                HttpStatus.UNAUTHORIZED,
-                "Token inválido ou expirado",
-                request
-        );
-    }
+        @ExceptionHandler(ValidationException.class)
+        public ResponseEntity<ApiError> handleValidationException(ValidationException ex, HttpServletRequest request) {
+                return buildError(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        }
 
-    @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiError> handleBusiness(
-            BusinessException ex,
-            HttpServletRequest request
-    ) {
-        return buildError(
-                ex.getStatus(),
-                ex.getMessage(),
-                request
-        );
-    }
+        // 400 - ConstraintViolation
+        @ExceptionHandler(ConstraintViolationException.class)
+        public ResponseEntity<ApiError> handleConstraintViolation(
+                        ConstraintViolationException ex,
+                        HttpServletRequest request) {
+                LOGGER.debug("Violacao de restricao na requisicao {}", safeRequestPath(request), ex);
+                return buildError(HttpStatus.BAD_REQUEST, "Parametros invalidos", request);
+        }
 
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ApiError> handleBadCredentials(
-            BadCredentialsException ex,
-            HttpServletRequest request
-    ) {
-        return buildError(
-                HttpStatus.UNAUTHORIZED,
-                "Email ou senha inválidos",
-                request
-        );
-    }
-    
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiError> handleHttpMessageNotReadable(
-            HttpMessageNotReadableException ex,
-            HttpServletRequest request
-    ){
-        LOGGER.debug("Corpo de requisicao invalido em {}", safeRequestPath(request), ex);
-        return buildError(
-                HttpStatus.BAD_REQUEST,
-                "Corpo da requisicao invalido",
-                request
-        );
-    }
-    
-    @ExceptionHandler(JsonParseException.class)
-    public ResponseEntity<ApiError> handleJsonParseException(
-            JsonParseException ex,
-            HttpServletRequest request
-    ) {
-        LOGGER.debug("JSON invalido em {}", safeRequestPath(request), ex);
-        return buildError(
-                HttpStatus.BAD_REQUEST,
-                "JSON invalido",
-                request
-        );
-    }
-    
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgumentException(
-            IllegalArgumentException ex,
-            HttpServletRequest request
-    ) {
-        LOGGER.debug("Argumento invalido em {}", safeRequestPath(request), ex);
-        return buildError(
-                HttpStatus.BAD_REQUEST,
-                "Argumento invalido",
-                request
-        );
-    }
+        // 403 - Acesso negado
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<ApiError> handleAccessDenied(
+                        AccessDeniedException ex,
+                        HttpServletRequest request) {
+                return buildError(HttpStatus.FORBIDDEN, "Acesso negado", request);
+        }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleGeneric(
-            Exception ex,
-            HttpServletRequest request
-    ) {
-        LOGGER.error("Erro interno nao tratado em {}", safeRequestPath(request), ex);
-        return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Erro interno no servidor",
-                request);
-    }
+        // 500 - Erro ao enviar email
+        @ExceptionHandler(MailSendException.class)
+        public ResponseEntity<ApiError> handleMailError(
+                        MailSendException ex,
+                        HttpServletRequest request) {
+                LOGGER.error("Erro ao enviar email na requisicao {}", safeRequestPath(request), ex);
+                return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
+                                "Erro ao enviar email",
+                                request);
+        }
+
+        // 401 - Qualquer outra exception
+        @ExceptionHandler(JWTVerificationException.class)
+        public ResponseEntity<ApiError> handleJWTVerification(
+                        JWTVerificationException ex,
+                        HttpServletRequest request) {
+                return buildError(
+                                HttpStatus.UNAUTHORIZED,
+                                "Token inválido ou expirado",
+                                request);
+        }
+
+        @ExceptionHandler(BusinessException.class)
+        public ResponseEntity<ApiError> handleBusiness(
+                        BusinessException ex,
+                        HttpServletRequest request) {
+                return buildError(
+                                ex.getStatus(),
+                                ex.getMessage(),
+                                request);
+        }
+
+        @ExceptionHandler(BadCredentialsException.class)
+        public ResponseEntity<ApiError> handleBadCredentials(
+                        BadCredentialsException ex,
+                        HttpServletRequest request) {
+                return buildError(
+                                HttpStatus.UNAUTHORIZED,
+                                "Email ou senha inválidos",
+                                request);
+        }
+
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ApiError> handleHttpMessageNotReadable(
+                        HttpMessageNotReadableException ex,
+                        HttpServletRequest request) {
+                LOGGER.debug("Corpo de requisicao invalido em {}", safeRequestPath(request), ex);
+                return buildError(
+                                HttpStatus.BAD_REQUEST,
+                                "Corpo da requisicao invalido",
+                                request);
+        }
+
+        @ExceptionHandler(JsonParseException.class)
+        public ResponseEntity<ApiError> handleJsonParseException(
+                        JsonParseException ex,
+                        HttpServletRequest request) {
+                LOGGER.debug("JSON invalido em {}", safeRequestPath(request), ex);
+                return buildError(
+                                HttpStatus.BAD_REQUEST,
+                                "JSON invalido",
+                                request);
+        }
+
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<ApiError> handleIllegalArgumentException(
+                        IllegalArgumentException ex,
+                        HttpServletRequest request) {
+                LOGGER.debug("Argumento invalido em {}", safeRequestPath(request), ex);
+                return buildError(
+                                HttpStatus.BAD_REQUEST,
+                                "Argumento invalido",
+                                request);
+        }
+
+        @ExceptionHandler(Exception.class)
+        public ResponseEntity<ApiError> handleGeneric(
+                        Exception ex,
+                        HttpServletRequest request) {
+                LOGGER.error("Erro interno nao tratado em {}", safeRequestPath(request), ex);
+                return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
+                                "Erro interno no servidor",
+                                request);
+        }
 
 }

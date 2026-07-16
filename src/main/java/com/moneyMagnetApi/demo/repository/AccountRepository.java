@@ -20,6 +20,8 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     List<Account> findAllByItemIdAndPluggyAccountIdIn(UUID itemId, Collection<String> pluggyAccountIds);
 
+    List<Account> findAllByItemId(UUID itemId);
+
     @Query(value = """
             SELECT pluggy_account_id
             FROM accounts
