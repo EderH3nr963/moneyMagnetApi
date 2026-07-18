@@ -33,8 +33,6 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "accounts")
-@SQLDelete(sql = "UPDATE accounts SET deleted = true WHERE id = ?")
-@SQLRestriction("deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
