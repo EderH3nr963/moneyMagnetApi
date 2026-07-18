@@ -14,7 +14,7 @@ public record RegisterRequestDTO(
 
         @NotBlank(message = "A senha é obrigatória")
         @Pattern(
-                regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,17}$",
+                regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&#=])[A-Za-z\\d@$!%*?&#=]{8,17}$",
                 message = "A senha deve ter entre 8 e 17 caracteres, incluindo letra maiúscula, minúscula, número e caractere especial"
         )
         String password,
