@@ -50,6 +50,7 @@ public class TransactionService {
             UUID userId,
             LocalDate startDate,
             LocalDate endDate,
+            UUID accountId,
             Pageable pageable
     ) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
@@ -67,7 +68,7 @@ public class TransactionService {
 
         return transactionsPageCache.get(
                 transactionPageCacheKey(userId, startDate, endDate, pageable),
-                key -> loadTransactionsPage(userId, startDate, endDate, pageable)
+                key -> loadTransactionsPage(userId, startDate, endDate, accountId, pageable)
         );
     }
 
@@ -75,6 +76,7 @@ public class TransactionService {
             UUID userId,
             LocalDate startDate,
             LocalDate endDate,
+            UUID accountId,
             Pageable pageable
     ) {
         
@@ -85,56 +87,18 @@ public class TransactionService {
                 ? endDate.plusDays(1).atStartOfDay()
                 : null;
 
-        Page<Transaction> transactions = findAllByPeriod(
+        Page<Transaction> transactions = transactionRepository.findWithFilters(
                 userId,
-                startDateTime,
-                endDateTime,
+                DEFAULT_NATURES,
+                accountId,
+                startDate,
+                endDate,
                 pageable
         );
         
         return transactions.map(TransactionResponse::fromResponse);
     }
 
-    private Page<Transaction> findAllByPeriod(
-            UUID userId,
-            LocalDateTime startDate,
-            LocalDateTime endDate,
-            Pageable pageable
-    ) {
-        if (startDate != null && endDate != null) {
-            return transactionRepository.findAllByUserAndNatureInBetween(
-                    userId,
-                    DEFAULT_NATURES,
-                    startDate,
-                    endDate,
-                    pageable
-            );
-        }
-
-        if (startDate != null) {
-            return transactionRepository.findAllByUserAndNatureInStartingAt(
-                    userId,
-                    DEFAULT_NATURES,
-                    startDate,
-                    pageable
-            );
-        }
-
-        if (endDate != null) {
-            return transactionRepository.findAllByUserAndNatureInEndingBefore(
-                    userId,
-                    DEFAULT_NATURES,
-                    endDate,
-                    pageable
-            );
-        }
-
-        return transactionRepository.findAllByUserAndNatureIn(
-                userId,
-                DEFAULT_NATURES,
-                pageable
-        );
-    }
     
     @Transactional(readOnly = true)
     public List<TransactionResponse> findByAccount(UUID userId, UUID accountId) {
