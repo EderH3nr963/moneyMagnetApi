@@ -58,7 +58,7 @@ public class AuditLogFilter extends OncePerRequestFilter {
             );
             String route = resolveRoute(request);
 
-            if (route == "/health") {
+            if (route.equals("health")) {
                 return;
             }
 
