@@ -45,7 +45,7 @@ class PluggyClientTest {
                         {
                           "options": {
                             "clientUserId": "0abcb755-726b-48df-939a-4b4b8146509d",
-                            "avoidDuplicates": true
+                            "avoidDuplicates": false
                           }
                         }
                         """))

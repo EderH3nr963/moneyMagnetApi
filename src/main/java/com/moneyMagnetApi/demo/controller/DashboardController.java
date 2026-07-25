@@ -109,7 +109,7 @@ public class DashboardController {
                 month == null ? now.getMonthValue() : month
         );
 
-        return dashboardService.getFinancialHistoryPublic(
+        return dashboardService.getFinancialHistory(
                 usuarioDetails.getId(),
                 referenceMonth,
                 months

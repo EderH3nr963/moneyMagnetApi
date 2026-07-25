@@ -79,13 +79,6 @@ public class TransactionService {
             UUID accountId,
             Pageable pageable
     ) {
-        
-        LocalDateTime startDateTime = startDate != null
-                ? startDate.atStartOfDay()
-                : null;
-        LocalDateTime endDateTime = endDate != null
-                ? endDate.plusDays(1).atStartOfDay()
-                : null;
 
         Page<Transaction> transactions = transactionRepository.findWithFilters(
                 userId,

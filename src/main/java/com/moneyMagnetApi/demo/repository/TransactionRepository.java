@@ -4,6 +4,9 @@ import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.account.AccountType;
 import com.moneyMagnetApi.demo.domain.transaction.Transaction;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
+import com.moneyMagnetApi.demo.domain.transaction.TransactionStatus;
+import com.moneyMagnetApi.demo.domain.transaction.TransactionType;
+import com.moneyMagnetApi.demo.repository.projection.MonthlyFinancialProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,13 +26,19 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         UUID userId);
 
         @Query("""
-                        select t
-                        from Transaction t
-                        where t.account.item.usuario.id = :userId
-                          and t.nature in :natures
-                          and (:accountId IS NULL OR t.account.id = :accountId)
-                          AND (:startDate IS NULL OR t.transactionDate >= :startDate)
-                          AND (:endDate IS NULL OR t.transactionDate <= :endDate)
+                SELECT t
+                FROM Transaction t
+                WHERE t.account.item.usuario.id = :userId
+                        AND t.nature IN :natures
+                        AND (:accountId IS NULL OR t.account.id = :accountId)
+                        AND (
+                            CAST(:startDate AS localdate) IS NULL
+                            OR CAST(t.paymentDate AS localdate) >= :startDate
+                        )
+                        AND (
+                            CAST(:endDate AS localdate) IS NULL
+                            OR CAST(t.paymentDate AS localdate) <= :endDate
+                        )
                         """)
         Page<Transaction> findWithFilters(
                         @Param("userId") UUID userId,
@@ -40,53 +49,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         Pageable pageable);
 
         @Query("""
-                        select t
-                        from Transaction t
-                        where t.account.item.usuario.id = :userId
-                          and t.nature in :natures
-                          and coalesce(t.paymentDate, t.date) >= :startDate
-                        """)
-        Page<Transaction> findAllByUserAndNatureInStartingAt(
-                        @Param("userId") UUID userId,
-                        @Param("natures") List<TransactionNature> natures,
-                        @Param("startDate") LocalDateTime startDate,
-                        Pageable pageable);
-
-        @Query("""
-                        select t
-                        from Transaction t
-                        where t.account.item.usuario.id = :userId
-                          and t.nature in :natures
-                          and coalesce(t.paymentDate, t.date) < :endDate
-                        """)
-        Page<Transaction> findAllByUserAndNatureInEndingBefore(
-                        @Param("userId") UUID userId,
-                        @Param("natures") List<TransactionNature> natures,
-                        @Param("endDate") LocalDateTime endDate,
-                        Pageable pageable);
-
-        @Query("""
-                        select t
-                        from Transaction t
-                        where t.account.item.usuario.id = :userId
-                          and t.nature in :natures
-                          and coalesce(t.paymentDate, t.date) >= :startDate
-                          and coalesce(t.paymentDate, t.date) < :endDate
-                        """)
-        Page<Transaction> findAllByUserAndNatureInBetween(
-                        @Param("userId") UUID userId,
-                        @Param("natures") List<TransactionNature> natures,
-                        @Param("startDate") LocalDateTime startDate,
-                        @Param("endDate") LocalDateTime endDate,
-                        Pageable pageable);
-
-        @Query("""
-                        select t
-                        from Transaction t
-                        where t.account.item.usuario.id = :userId
-                          and t.account.item.institution.id = :institutionId
-                          and t.account.type = :accountType
-                          and t.nature in :natures
+                        SELECT t
+                        FROM Transaction t
+                        WHERE t.account.item.usuario.id = :userId
+                          AND t.account.item.institution.id = :institutionId
+                          AND t.account.type = :accountType
+                          AND t.nature IN :natures
                         """)
         @EntityGraph(attributePaths = { "account", "category" })
         Page<Transaction> findAllByUserAndInstitutionAndAccountType(
@@ -97,12 +65,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         Pageable pageable);
 
         @Query("""
-                        select t
-                        from Transaction t
-                        where t.account.item.usuario.id = :userId
-                          and t.account.item.id = :itemId
-                          and t.account.type = :accountType
-                          and t.nature in :natures
+                        SELECT t
+                        FROM Transaction t
+                        WHERE t.account.item.usuario.id = :userId
+                          AND t.account.item.id = :itemId
+                          AND t.account.type = :accountType
+                          AND t.nature IN :natures
                         """)
         @EntityGraph(attributePaths = { "account", "category" })
         Page<Transaction> findAllByUserAndItemAndAccountType(
@@ -126,13 +94,13 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         List<TransactionNature> natures);
 
         Optional<Transaction> findByPluggyTransactionId(String pluggyTransactionId);
-
+        
         @Query("""
-                        select t
-                        from Transaction t
-                        where t.account.item.usuario.id = :userId
-                          and t.date >= :startDate
-                          and t.date < :endDate
+                        SELECT t
+                        FROM Transaction t
+                        WHERE t.account.item.usuario.id = :userId
+                          AND t.date >= :startDate
+                          AND t.date < :endDate
                         order by t.date desc
                         """)
         @EntityGraph(attributePaths = { "account", "category" })
@@ -140,4 +108,41 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         @Param("userId") UUID userId,
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate);
+        
+        @Query("""
+            SELECT
+                YEAR(t.date) AS year,
+                MONTH(t.date) AS month,
+        
+                SUM(
+                    CASE
+                        WHEN t.type = :income
+                        THEN ABS(t.amount)
+                        ELSE 0
+                    END
+                ) AS income,
+        
+                SUM(
+                    CASE
+                        WHEN t.type = :expense
+                        THEN ABS(t.amount)
+                        ELSE 0
+                    END
+                ) AS expenses
+        
+            FROM Transaction t
+            WHERE t.account.item.usuario.id = :userId
+              AND t.paymentDate >= :startDate
+              AND t.paymentDate < :endDate
+        
+            GROUP BY YEAR(t.date), MONTH(t.date)
+            ORDER BY YEAR(t.date), MONTH(t.date)
+        """)
+        List<MonthlyFinancialProjection> findMonthlyFinancialSummary(
+                UUID userId,
+                LocalDateTime startDate,
+                LocalDateTime endDate,
+                TransactionType income,
+                TransactionType expense
+        );
 }

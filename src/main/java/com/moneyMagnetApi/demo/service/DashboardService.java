@@ -1,5 +1,6 @@
 package com.moneyMagnetApi.demo.service;
 
+import com.moneyMagnetApi.demo.config.CacheConfig;
 import com.moneyMagnetApi.demo.domain.transaction.Transaction;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionStatus;
@@ -14,6 +15,7 @@ import com.moneyMagnetApi.demo.dto.dashboard.response.MonthlyFinancialResponse;
 import com.moneyMagnetApi.demo.dto.transaction.response.TransactionResponse;
 import com.moneyMagnetApi.demo.repository.CategoryRepository;
 import com.moneyMagnetApi.demo.repository.TransactionRepository;
+import com.moneyMagnetApi.demo.repository.projection.MonthlyFinancialProjection;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,7 @@ public class DashboardService {
     private final AccountService accountService;
     private final TransactionRepository transactionRepository;
     private final CategoryRepository categoryRepository;
+    private final CacheConfig cacheConfig;
     
     public List<CategoryExpenseResponse> getExpensesByCategory(UUID userId, YearMonth referenceMonth) {
         return categoryRepository.findExpensesByCategory(
@@ -53,17 +56,18 @@ public class DashboardService {
 
     public DashboardResponse getDashboard(UUID userId, YearMonth referenceMonth) {
         YearMonth firstHistoryMonth = referenceMonth.minusMonths(DEFAULT_HISTORY_MONTHS - 1L);
-        List<Transaction> historyTransactions = transactionRepository.findAllByUserAndPeriod(
+        
+        List<MonthlyFinancialProjection> monthlyFinancialProjections = transactionRepository.findMonthlyFinancialSummary(
                 userId,
                 firstHistoryMonth.atDay(1).atTime(0, 0),
-                referenceMonth.plusMonths(1).atDay(1).atStartOfDay()
+                referenceMonth.plusMonths(1).atDay(1).atStartOfDay(),
+                TransactionType.CREDIT,
+                TransactionType.DEBIT
         );
-
-        Map<YearMonth, MonthlyAmounts> totalsByMonth = buildMonthlyTotals(
-                firstHistoryMonth,
-                DEFAULT_HISTORY_MONTHS,
-                historyTransactions
-        );
+        
+        Map<YearMonth, MonthlyAmounts> totalsByMonth = toMonthlyAmountsMap(firstHistoryMonth, DEFAULT_HISTORY_MONTHS,  monthlyFinancialProjections);
+        
+        
         List<MonthlyFinancialResponse> financialHistory =
                 toMonthlyFinancialHistory(totalsByMonth);
 
@@ -115,48 +119,27 @@ public class DashboardService {
         );
     }
 
-    public List<MonthlyFinancialResponse> getFinancialHistoryPublic(
+    public List<MonthlyFinancialResponse> getFinancialHistory(
             UUID userId,
             YearMonth referenceMonth,
             int months
     ) {
         validateHistoryMonths(months);
         YearMonth firstHistoryMonth = referenceMonth.minusMonths(months - 1L);
-        List<Transaction> historyTransactions = transactionRepository.findAllByUserAndPeriod(
+        List<MonthlyFinancialProjection> monthlyFinancialProjections = transactionRepository.findMonthlyFinancialSummary(
                 userId,
                 firstHistoryMonth.atDay(1).atTime(0, 0),
-                referenceMonth.plusMonths(1).atDay(1).atStartOfDay()
+                referenceMonth.plusMonths(1).atDay(1).atStartOfDay(),
+                TransactionType.CREDIT,
+                TransactionType.DEBIT
         );
-
-        return getFinancialHistoryPrivate(referenceMonth, historyTransactions, months);
+        
+        Map<YearMonth, MonthlyAmounts> totalsByMonth =  toMonthlyAmountsMap(firstHistoryMonth, months,  monthlyFinancialProjections);
+        
+        return toMonthlyFinancialHistory(totalsByMonth);
     }
     
-    private List<MonthlyFinancialResponse> getFinancialHistoryPrivate(
-            YearMonth referenceMonth,
-            List<Transaction> historyTransactions,
-            int months
-    ) {
-        validateHistoryMonths(months);
-        YearMonth firstHistoryMonth = referenceMonth.minusMonths(months - 1L);
-
-        return toMonthlyFinancialHistory(
-                buildMonthlyTotals(firstHistoryMonth, months, historyTransactions)
-        );
-    }
-
-    private Map<YearMonth, MonthlyAmounts> buildMonthlyTotals(
-            YearMonth firstHistoryMonth,
-            int months,
-            List<Transaction> historyTransactions
-    ) {
-        Map<YearMonth, MonthlyAmounts> totalsByMonth = getTotalByMoth(firstHistoryMonth, months);
-
-        historyTransactions.stream()
-                .filter(transaction -> transaction.getStatus() == TransactionStatus.POSTED)
-                .forEach(transaction -> addToMonth(totalsByMonth, transaction));
-
-        return totalsByMonth;
-    }
+    
 
     private List<MonthlyFinancialResponse> toMonthlyFinancialHistory(
             Map<YearMonth, MonthlyAmounts> totalsByMonth
@@ -165,81 +148,11 @@ public class DashboardService {
                 .map(entry -> toMonthlyResponse(entry.getKey(), entry.getValue()))
                 .toList();
     }
-    
-    private Map<YearMonth, MonthlyAmounts> getTotalByMoth(
-            YearMonth firstHistoryMonth,
-            int months
-    ) {
-        return initializeMonthlyTotals(firstHistoryMonth, months);
-    }
-
-    private Map<YearMonth, MonthlyAmounts> initializeMonthlyTotals(
-            YearMonth firstMonth,
-            int months
-    ) {
-        Map<YearMonth, MonthlyAmounts> totals = new LinkedHashMap<>();
-        for (int index = 0; index < months; index++) {
-            totals.put(firstMonth.plusMonths(index), MonthlyAmounts.empty());
-        }
-        return totals;
-    }
 
     private void validateHistoryMonths(int months) {
         if (!ALLOWED_HISTORY_MONTHS.contains(months)) {
             throw new ValidationException("O historico financeiro aceita apenas 6, 9 ou 12 meses.");
         }
-    }
-
-    private void addToMonth(Map<YearMonth, MonthlyAmounts> totalsByMonth, Transaction transaction) {
-        YearMonth month = YearMonth.from(transaction.getDate());
-        MonthlyAmounts totals = totalsByMonth.get(month);
-        if (totals == null) {
-            return;
-        }
-
-        BigDecimal amount = transaction.getAmount().abs();
-        TransactionNature nature = effectiveNature(transaction);
-        
-        if (nature == TransactionNature.INCOME) {
-            totals.addIncome(amount);
-        } else if (nature == TransactionNature.EXPENSE) {
-            totals.addExpense(amount);
-        } else if (nature == TransactionNature.INTERNAL_TRANSFER) {
-            if (transaction.getType() == TransactionType.CREDIT) {
-                totals.addIncome(amount);
-            } else {
-                totals.addExpense(amount);
-            }
-        }
-    }
-
-    private TransactionNature effectiveNature(Transaction transaction) {
-        if (transaction.getNature() != null) {
-            return transaction.getNature();
-        }
-
-        if (transaction.getAccount().getType() == AccountType.CREDIT
-                && "Credit card payment".equalsIgnoreCase(
-                        transaction.getProviderCategory()
-                )) {
-            return TransactionNature.CREDIT_CARD_PAYMENT;
-        }
-        if (transaction.getCategory() != null
-                && "transferencia-entre-contas".equals(
-                        transaction.getCategory().getNormalizedName()
-                )) {
-            return TransactionNature.INTERNAL_TRANSFER;
-        }
-        if (transaction.getAccount().getType() == AccountType.CREDIT) {
-            return transaction.getAmount().compareTo(BigDecimal.ZERO) < 0
-                    ? TransactionNature.CREDIT_CARD_PAYMENT
-                    : TransactionNature.EXPENSE;
-        }
-
-        return transaction.getType()
-                == com.moneyMagnetApi.demo.domain.transaction.TransactionType.CREDIT
-                ? TransactionNature.INCOME
-                : TransactionNature.EXPENSE;
     }
 
     private MonthlyFinancialResponse toMonthlyResponse(
@@ -276,31 +189,60 @@ public class DashboardService {
                 .multiply(ONE_HUNDRED)
                 .setScale(2, RoundingMode.HALF_UP);
     }
-
-    private static final class MonthlyAmounts {
-        private BigDecimal income = BigDecimal.ZERO;
-        private BigDecimal expenses = BigDecimal.ZERO;
-
+    
+    private Map<YearMonth, MonthlyAmounts> toMonthlyAmountsMap(
+            YearMonth firstMonth,
+            int months,
+            List<MonthlyFinancialProjection> projections
+    ) {
+        Map<YearMonth, MonthlyAmounts> totals = new LinkedHashMap<>();
+        
+        for (int index = 0; index < months; index++) {
+            totals.put(
+                    firstMonth.plusMonths(index),
+                    MonthlyAmounts.empty()
+            );
+        }
+        
+        projections.forEach(projection -> {
+            YearMonth month = YearMonth.of(
+                    projection.getYear(),
+                    projection.getMonth()
+            );
+            
+            totals.put(
+                    month,
+                    MonthlyAmounts.of(
+                            projection.getIncome(),
+                            projection.getExpenses()
+                    )
+            );
+        });
+        
+        return totals;
+    }
+    
+    private record MonthlyAmounts(
+            BigDecimal income,
+            BigDecimal expenses
+    ) {
         static MonthlyAmounts empty() {
-            return new MonthlyAmounts();
+            return new MonthlyAmounts(
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO
+            );
         }
-
-        void addIncome(BigDecimal amount) {
-            income = income.add(amount);
+        
+        static MonthlyAmounts of(
+                BigDecimal income,
+                BigDecimal expenses
+        ) {
+            return new MonthlyAmounts(
+                    Objects.requireNonNullElse(income, BigDecimal.ZERO),
+                    Objects.requireNonNullElse(expenses, BigDecimal.ZERO)
+            );
         }
-
-        void addExpense(BigDecimal amount) {
-            expenses = expenses.add(amount);
-        }
-
-        BigDecimal income() {
-            return income;
-        }
-
-        BigDecimal expenses() {
-            return expenses;
-        }
-
+        
         BigDecimal balance() {
             return income.subtract(expenses);
         }

@@ -4,17 +4,26 @@ import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.account.AccountType;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyTransactionResponse;
+
+import lombok.RequiredArgsConstructor;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.stereotype.Service;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(MockitoExtension.class)
 class TransactionSyncServiceTest {
 
-    private final TransactionSyncService service =
-            new TransactionSyncService(null, null, null, null, null, null);
-
+    @InjectMocks
+    private TransactionSyncService service;
+    
     @Test
     void shouldUseNatureReceivedFromPluggy() {
         Account account = account(AccountType.CHECKING);

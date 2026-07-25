@@ -30,7 +30,7 @@ class RefreshTokenServiceTest {
     private RefreshTokenService refreshTokenService;
 
     @Test
-    void shouldKeepOriginalRefreshTokenWhenRefreshingAccessToken() {
+    void shouldRotateRefreshTokenWhenRefreshingAccessToken() {
         Usuario usuario = new Usuario();
         usuario.setTokenVersion(1L);
 
@@ -46,10 +46,12 @@ class RefreshTokenServiceTest {
         RefreshTokenService.RotatedRefreshToken rotated = refreshTokenService.rotate("raw-token");
 
         assertThat(rotated.usuario()).isEqualTo(usuario);
-        assertThat(rotated.rawToken()).isEqualTo("raw-token");
-        assertThat(rotated.expiresAt()).isEqualTo(currentRefreshToken.getExpiresAt());
+        assertThat(rotated.rawToken()).isNotEqualTo("raw-token");
+        assertThat(rotated.expiresAt()).isNotEqualTo(currentRefreshToken.getExpiresAt());
 
-        verify(refreshTokenRepository, never()).delete(any());
-        verify(refreshTokenRepository, never()).save(any());
+        verify(refreshTokenRepository).delete(currentRefreshToken);
+        verify(refreshTokenRepository).flush();
+        
+        verify(refreshTokenRepository).save(any());
     }
 }

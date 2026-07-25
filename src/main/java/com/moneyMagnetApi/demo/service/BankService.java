@@ -26,7 +26,8 @@ public class BankService {
 
     private static final List<TransactionNature> DEFAULT_NATURES = List.of(
             TransactionNature.INCOME,
-            TransactionNature.EXPENSE
+            TransactionNature.EXPENSE,
+            TransactionNature.REFUND
     );
 
     private final ItemRepository itemRepository;

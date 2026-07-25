@@ -3,11 +3,9 @@ package com.moneyMagnetApi.demo;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class DemoApplicationTests {
-
-	@Test
-	void contextLoads() {
-	}
-
+@SpringBootTest()
+public class DemoApplicationTest {
+    @Test
+    public void contextLoads() {
+    }
 }

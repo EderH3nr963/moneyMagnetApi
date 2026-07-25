@@ -46,6 +46,8 @@ class ItemServiceTest {
     private AccountSyncService accountSyncService;
     @Mock
     private TransactionSyncService transactionSyncService;
+    @Mock
+    private AppCacheInvalidationService cacheInvalidationService;
 
     @InjectMocks
     private ItemService itemService;
