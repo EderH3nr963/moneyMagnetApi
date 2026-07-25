@@ -1,0 +1,44 @@
+name: CI - MoneyMagnet API
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+  pull_request:
+    branches:
+      - dev
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Testes e Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Dar permissão ao Maven Wrapper
+        run: chmod +x ./mvnw
+
+      - name: Executar testes
+        run: ./mvnw --batch-mode clean test
+
+      - name: Verificar build da aplicação
+        run: ./mvnw --batch-mode package -DskipTests
