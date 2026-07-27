@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.moneyMagnetApi.demo.domain.category.Category;
 import com.moneyMagnetApi.demo.domain.item.Item;
+import com.moneyMagnetApi.demo.domain.usuario.Usuario;
 import com.moneyMagnetApi.demo.dto.account.response.AccountResponse;
 import com.moneyMagnetApi.demo.dto.category.response.CategoryResponse;
 import com.moneyMagnetApi.demo.dto.category.response.MerchantCategoryRuleResponse;
@@ -19,6 +20,13 @@ import java.util.UUID;
 
 @Configuration
 public class CacheConfig {
+    
+    @Bean
+    public Cache<String, Usuario> usuarioByIdCache() {
+        return Caffeine.newBuilder()
+                .expireAfterWrite(Duration.ofMinutes(30))
+                .build();
+    }
 
     @Bean
     public Cache<UUID, List<CategoryResponse>> categoriesByUserCache() {

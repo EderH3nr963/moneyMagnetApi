@@ -10,6 +10,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.UUID;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,6 +37,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 
 @Service
+@RequiredArgsConstructor
 public class UsuarioService {
 
     @Value("${app.frontend.base-url}")
@@ -45,20 +48,7 @@ public class UsuarioService {
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
     private final EmailService emailService;
-
-    public UsuarioService(
-            UsuarioRepository usuarioRepository,
-            UpdateEmailRepository updateEmailRepository,
-            PasswordEncoder passwordEncoder,
-            RefreshTokenService refreshTokenService,
-            EmailService emailService
-    ) {
-        this.usuarioRepository = usuarioRepository;
-        this.updateEmailRepository = updateEmailRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.refreshTokenService = refreshTokenService;
-        this.emailService = emailService;
-    }
+    private final Cache<String, Usuario> usuarioByIdCache;
 
     @Transactional(readOnly = true)
     public UsuarioResponseDTO getById(UUID id) {
@@ -133,6 +123,7 @@ public class UsuarioService {
         Usuario usuario = updateEmail.getUsuario();
         usuario.setEmail(updateEmail.getNewEmail());
         usuario.setTokenVersion(usuario.getTokenVersion() + 1);
+        usuarioByIdCache.invalidate(usuario.getId().toString());
         refreshTokenService.revokeAll(usuario);
         updateEmail.setUsedAt(Instant.now());
     }
@@ -168,6 +159,7 @@ public class UsuarioService {
         String novaSenhaHash = passwordEncoder.encode(dto.password());
         usuario.setPassword(novaSenhaHash);
         usuario.setTokenVersion(usuario.getTokenVersion() + 1);
+        usuarioByIdCache.invalidate(usuario.getId().toString());
         refreshTokenService.revokeAll(usuario);
     }
 
@@ -184,7 +176,8 @@ public class UsuarioService {
     public void deleteById(UUID id) {
 
         Usuario usuario = findUsuarioOrThrow(id);
-
+        
+        usuarioByIdCache.invalidate(usuario.getId().toString());
         usuarioRepository.delete(usuario);
     }
 
