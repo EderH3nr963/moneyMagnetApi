@@ -57,13 +57,18 @@ public class AuditLogFilter extends OncePerRequestFilter {
                     System.nanoTime() - startedAt
             );
             String route = resolveRoute(request);
-
+            UUID userId = resolveUserId();
+            
             if (route.startsWith("/health")) {
+                return;
+            }
+            
+            if (userId == null) {
                 return;
             }
 
             auditLogService.save(new AuditLogEntry(
-                    resolveUserId(),
+                    userId,
                     request.getMethod(),
                     route,
                     resolveResourceId(request),

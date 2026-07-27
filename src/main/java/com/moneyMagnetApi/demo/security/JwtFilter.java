@@ -1,6 +1,7 @@
 package com.moneyMagnetApi.demo.security;
 
 import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.moneyMagnetApi.demo.domain.usuario.Usuario;
 import com.moneyMagnetApi.demo.repository.UsuarioRepository;
 import jakarta.servlet.FilterChain;
@@ -25,10 +26,12 @@ import java.util.UUID;
 public class JwtFilter extends OncePerRequestFilter {
     private TokenService tokenService;
     private UsuarioRepository usuarioRepository;
+    private Cache<String, Usuario> usuarioByIdCache;
 
-    public JwtFilter(TokenService tokenService, UsuarioRepository usuarioRepository) {
+    public JwtFilter(TokenService tokenService, UsuarioRepository usuarioRepository, Cache<String, Usuario> usuarioByIdCache) {
         this.tokenService = tokenService;
         this.usuarioRepository = usuarioRepository;
+        this.usuarioByIdCache = usuarioByIdCache;
     }
 
     @Override
@@ -43,18 +46,15 @@ public class JwtFilter extends OncePerRequestFilter {
             try {
                 TokenService.ValidatedToken validatedToken = tokenService.validateToken(token);
 
-                Optional<Usuario> usuarioOpt = usuarioRepository.findById(validatedToken.userId());
+                Usuario usuario = usuarioByIdCache
+                        .get(validatedToken.userId().toString(), key -> usuarioRepository.findById(UUID.fromString(key)).orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado para o token.")));
 
-                if (usuarioOpt.isEmpty()) {
-                    throw new UsernameNotFoundException("Usuário não encontrado para o token.");
-                }
-
-                if (usuarioOpt.get().getTokenVersion() != validatedToken.tokenVersion()) {
+                if (usuario.getTokenVersion() != validatedToken.tokenVersion()) {
                     throw new JWTVerificationException("Sessao revogada.");
                 }
 
                 UsuarioDetailsImpl usuarioDetails =
-                        new UsuarioDetailsImpl(usuarioOpt.get());
+                        new UsuarioDetailsImpl(usuario);
 
                 var auth = new UsernamePasswordAuthenticationToken(
                         usuarioDetails,
