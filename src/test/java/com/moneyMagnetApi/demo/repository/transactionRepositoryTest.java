@@ -63,10 +63,11 @@ class transactionRepositoryTest {
 
         Page<Transaction> result = transactionRepository.findWithFilters(
                 user.getId(),
-                List.of(TransactionNature.INCOME),
+                List.of(TransactionNature.INCOME.toString()),
                 selectedAccount.getId(),
                 LocalDate.parse("2025-01-01"),
                 LocalDate.parse("2025-01-31"),
+                null,
                 PageRequest.of(0, 10));
 
         assertEquals(1, result.getTotalElements());
@@ -90,10 +91,11 @@ class transactionRepositoryTest {
 
         Page<Transaction> result = transactionRepository.findWithFilters(
                 user.getId(),
-                List.of(TransactionNature.INCOME),
+                List.of(TransactionNature.INCOME.toString()),
                 account.getId(),
                 null,
                 LocalDate.parse("2025-01-31"),
+                null,
                 PageRequest.of(0, 10));
 
         assertEquals(2, result.getTotalElements());
@@ -118,9 +120,10 @@ class transactionRepositoryTest {
 
         Page<Transaction> result = transactionRepository.findWithFilters(
                 user.getId(),
-                List.of(TransactionNature.INCOME),
+                List.of(TransactionNature.INCOME.toString()),
                 account.getId(),
                 LocalDate.parse("2025-01-01"),
+                null,
                 null,
                 PageRequest.of(0, 10));
 

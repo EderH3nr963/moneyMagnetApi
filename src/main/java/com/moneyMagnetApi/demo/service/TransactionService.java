@@ -51,6 +51,7 @@ public class TransactionService {
             LocalDate startDate,
             LocalDate endDate,
             UUID accountId,
+            String search,
             Pageable pageable
     ) {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
@@ -67,8 +68,8 @@ public class TransactionService {
         }
 
         return transactionsPageCache.get(
-                transactionPageCacheKey(userId, startDate, endDate, pageable),
-                key -> loadTransactionsPage(userId, startDate, endDate, accountId, pageable)
+                transactionPageCacheKey(userId, startDate, endDate, accountId, pageable, search),
+                key -> loadTransactionsPage(userId, startDate, endDate, accountId, search, pageable)
         );
     }
 
@@ -77,15 +78,19 @@ public class TransactionService {
             LocalDate startDate,
             LocalDate endDate,
             UUID accountId,
+            String search,
             Pageable pageable
     ) {
 
-        Page<Transaction> transactions = transactionRepository.findWithFilters(
+        Page<Transaction> transactions;
+        
+        transactions = transactionRepository.findWithFilters(
                 userId,
-                DEFAULT_NATURES,
+                DEFAULT_NATURES.stream().map(Enum::name).toList(),
                 accountId,
                 startDate,
                 endDate,
+                search == null ? null : search.trim(),
                 pageable
         );
         
@@ -169,14 +174,18 @@ public class TransactionService {
             UUID userId,
             LocalDate startDate,
             LocalDate endDate,
-            Pageable pageable
+            UUID accountId,
+            Pageable pageable,
+            String search
     ) {
         return userId
                 + ":" + (startDate == null ? "" : startDate)
                 + ":" + (endDate == null ? "" : endDate)
+                + ":" + (accountId == null ? "" : accountId)
                 + ":" + pageable.getPageNumber()
                 + ":" + pageable.getPageSize()
-                + ":" + pageable.getSort();
+                + ":" + pageable.getSort()
+                + ":" + (search == null ? "" : search.trim().toLowerCase());
     }
     
 }

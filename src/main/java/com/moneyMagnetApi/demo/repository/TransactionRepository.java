@@ -24,29 +24,52 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
         Optional<Transaction> findByIdAndAccountItemUsuarioId(
                         UUID transactionId,
                         UUID userId);
-
-        @Query("""
-                SELECT t
-                FROM Transaction t
-                WHERE t.account.item.usuario.id = :userId
-                        AND t.nature IN :natures
-                        AND (:accountId IS NULL OR t.account.id = :accountId)
-                        AND (
-                            CAST(:startDate AS localdate) IS NULL
-                            OR CAST(t.paymentDate AS localdate) >= :startDate
-                        )
-                        AND (
-                            CAST(:endDate AS localdate) IS NULL
-                            OR CAST(t.paymentDate AS localdate) <= :endDate
-                        )
-                        """)
+        
+        @Query(
+                value = """
+                        SELECT t.*
+                        FROM transactions t
+                        JOIN accounts a ON a.id = t.account_id
+                        JOIN items i ON i.id = a.item_id
+                        WHERE i.user_id = :userId
+                          AND t.nature IN (:natures)
+                          AND (:accountId IS NULL OR t.account_id = :accountId)
+                          AND (:startDate IS NULL OR CAST(t.payment_date AS date) >= :startDate)
+                          AND (:endDate IS NULL OR CAST(t.payment_date AS date) <= :endDate)
+                          AND (
+                            :search IS NULL OR
+                            to_tsvector('portuguese', coalesce(t.description, ''))
+                              @@ websearch_to_tsquery('portuguese', :search)
+                          )
+                        ORDER BY t.payment_date DESC
+                        """,
+                countQuery = """
+                        SELECT count(*)
+                        FROM transactions t
+                        JOIN accounts a ON a.id = t.account_id
+                        JOIN items i ON i.id = a.item_id
+                        WHERE i.user_id = :userId
+                          AND t.nature IN (:natures)
+                          AND (:accountId IS NULL OR t.account_id = :accountId)
+                          AND (:startDate IS NULL OR CAST(t.payment_date AS date) >= :startDate)
+                          AND (:endDate IS NULL OR CAST(t.payment_date AS date) <= :endDate)
+                          AND (
+                            :search IS NULL OR
+                            to_tsvector('portuguese', coalesce(t.description, ''))
+                              @@ websearch_to_tsquery('portuguese', :search)
+                          )
+                        """,
+                nativeQuery = true
+        )
         Page<Transaction> findWithFilters(
-                        @Param("userId") UUID userId,
-                        @Param("natures") List<TransactionNature> natures,
-                        @Param("accountId") UUID accountId,
-                        @Param("startDate") LocalDate startDate,
-                        @Param("endDate") LocalDate endDate,
-                        Pageable pageable);
+                @Param("userId") UUID userId,
+                @Param("natures") List<String> natures,
+                @Param("accountId") UUID accountId,
+                @Param("startDate") LocalDate startDate,
+                @Param("endDate") LocalDate endDate,
+                @Param("search") String search,
+                Pageable pageable
+        );
 
         @Query("""
                         SELECT t
@@ -55,7 +78,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                           AND t.account.item.institution.id = :institutionId
                           AND t.account.type = :accountType
                           AND t.nature IN :natures
-                        """)
+        """)
         @EntityGraph(attributePaths = { "account", "category" })
         Page<Transaction> findAllByUserAndInstitutionAndAccountType(
                         @Param("userId") UUID userId,
@@ -71,7 +94,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                           AND t.account.item.id = :itemId
                           AND t.account.type = :accountType
                           AND t.nature IN :natures
-                        """)
+        """)
         @EntityGraph(attributePaths = { "account", "category" })
         Page<Transaction> findAllByUserAndItemAndAccountType(
                         @Param("userId") UUID userId,
@@ -102,7 +125,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                           AND t.date >= :startDate
                           AND t.date < :endDate
                         order by t.date desc
-                        """)
+        """)
         @EntityGraph(attributePaths = { "account", "category" })
         List<Transaction> findAllByUserAndPeriod(
                         @Param("userId") UUID userId,

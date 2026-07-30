@@ -3,11 +3,8 @@ package com.moneyMagnetApi.demo.service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.HexFormat;
 import java.util.UUID;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -49,6 +46,7 @@ public class UsuarioService {
     private final RefreshTokenService refreshTokenService;
     private final EmailService emailService;
     private final Cache<String, Usuario> usuarioByIdCache;
+    private final TokenHashService tokenHashService;
 
     @Transactional(readOnly = true)
     public UsuarioResponseDTO getById(UUID id) {
@@ -93,7 +91,7 @@ public class UsuarioService {
         String token = TokenGenerator.generateToken(32);
         UpdateEmail updateEmail = new UpdateEmail();
         updateEmail.setNewEmail(dto.email());
-        updateEmail.setTokenHash(hashToken(token));
+        updateEmail.setTokenHash(tokenHashService.hash(token));
         updateEmail.setExpiresAt(Instant.now().plus(15, ChronoUnit.MINUTES));
         updateEmail.setUsuario(usuario);
         updateEmailRepository.save(updateEmail);
@@ -104,7 +102,7 @@ public class UsuarioService {
 
     @Transactional
     public void confirmEmailUpdate(ConfirmEmailDTO dto) {
-        UpdateEmail updateEmail = updateEmailRepository.findByTokenHash(hashToken(dto.token()))
+        UpdateEmail updateEmail = updateEmailRepository.findByTokenHash(tokenHashService.hash(dto.token()))
                 .orElseThrow(() -> new EntityNotFoundException("Token inválido"));
 
         if (!passwordEncoder.matches(dto.password(), updateEmail.getUsuario().getPassword())) {
@@ -206,13 +204,4 @@ public class UsuarioService {
         }
     }
 
-    private String hashToken(String rawToken) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 indisponível", exception);
-        }
-    }
 }

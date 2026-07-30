@@ -2,14 +2,17 @@ package com.moneyMagnetApi.demo.service;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.moneyMagnetApi.demo.domain.account.Account;
+import com.moneyMagnetApi.demo.domain.account.AccountType;
 import com.moneyMagnetApi.demo.dto.account.response.AccountResponse;
 import com.moneyMagnetApi.demo.repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -48,7 +51,7 @@ public class AccountService {
     public List<AccountResponse> findByItem(UUID userId, UUID itemId) {
         return accountsByItemCache.get(cacheKey(userId, itemId), key -> loadByItem(userId, itemId));
     }
-
+    
     private List<AccountResponse> loadByItem(UUID userId, UUID itemId) {
         authorizationService.validateItem(userId, itemId);
 

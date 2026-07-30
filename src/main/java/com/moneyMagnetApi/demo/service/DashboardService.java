@@ -83,6 +83,7 @@ public class DashboardService {
                 .map(AccountResponse::balance)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
         BigDecimal openingBalance = totalBalance.subtract(current.balance());
         
         

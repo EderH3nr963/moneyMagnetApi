@@ -2,14 +2,16 @@ name: CI - MoneyMagnet API
 
 on:
   push:
-    branches: ['dev', 'main']
+    branches:
+      - dev
+      - main
 
   pull_request:
     branches:
       - main
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -34,8 +36,25 @@ jobs:
       - name: Dar permissão ao Maven Wrapper
         run: chmod +x ./mvnw
 
-      - name: Executar testes
-        run: ./mvnw --batch-mode clean test
+      - name: Executar testes e gerar build
+        run: ./mvnw --batch-mode clean package
 
-      - name: Verificar build da aplicação
-        run: ./mvnw --batch-mode package -DskipTests
+  deploy:
+    name: Deploy no Render
+    runs-on: ubuntu-latest
+
+    needs: test
+
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+    steps:
+      - name: Acionar deploy
+        env:
+          HOOK_DEPLOY_RENDER: ${{ secrets.HOOK_DEPLOY_RENDER }}
+        run: |
+          test -n "$HOOK_DEPLOY_RENDER"
+          curl --fail-with-body \
+            --silent \
+            --show-error \
+            --request GET \
+            "$HOOK_DEPLOY_RENDER"

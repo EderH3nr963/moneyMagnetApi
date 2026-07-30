@@ -1,6 +1,5 @@
 package com.moneyMagnetApi.demo.service;
 
-import com.github.benmanes.caffeine.cache.Cache;
 import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.category.Category;
 import com.moneyMagnetApi.demo.domain.item.Item;
@@ -25,7 +24,6 @@ import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,11 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,13 +49,10 @@ public class AuthorizationService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final PasswordResetTokenRepository tokenRepository;
-    private final ItemRepository itemRepository;
     private final EmailService emailService;
-    private final AccountRepository accountRepository;
-    private final TransactionRepository transactionRepository;
-    private final CategoryRepository categoryRepository;
-    private final Cache<String, Item> itemByUserAndIdCache;
     private final RefreshTokenService refreshTokenService;
+    private final ResourceAuthorizationService resourceAuthorizationService;
+    private final TokenHashService tokenHashService;
 
     private AuthenticatedSession authenticateAndGenerateResponse(
             String email,
@@ -124,7 +116,7 @@ public class AuthorizationService {
         Instant expiresAt = Instant.now().plus(5, ChronoUnit.MINUTES);
 
         PasswordResetToken resetToken = new PasswordResetToken();
-        resetToken.setTokenHash(hashToken(token));
+        resetToken.setTokenHash(tokenHashService.hash(token));
         resetToken.setUsuario(usuario);
         resetToken.setExpiresAt(expiresAt);
         tokenRepository.save(resetToken);
@@ -161,7 +153,7 @@ public class AuthorizationService {
 
     @Transactional
     public void resetPassword(ResetPasswordDTO dto) {
-        PasswordResetToken resetToken = tokenRepository.findByTokenHash(hashToken(dto.token()))
+        PasswordResetToken resetToken = tokenRepository.findByTokenHash(tokenHashService.hash(dto.token()))
                 .orElseThrow(() -> new EntityNotFoundException("Token inválido ou expirado!"));
 
         // Validações
@@ -190,42 +182,21 @@ public class AuthorizationService {
     }
     
     public Item validateItem(UUID userId, UUID itemId) {
-        return itemByUserAndIdCache.get(cacheKey(userId, itemId), key ->
-                itemRepository.findByIdAndUsuarioId(itemId, userId)
-                        .orElseThrow(() -> new AccessDeniedException("Item não encontrado."))
-        );
+        return resourceAuthorizationService.validateItem(userId, itemId);
     }
     
     public Account validateAccount(UUID userId, UUID accountId) {
-        return accountRepository.findByIdAndItemUsuarioId(accountId, userId)
-                .orElseThrow(() -> new AccessDeniedException("Conta não encontrada."));
+        return resourceAuthorizationService.validateAccount(userId, accountId);
     }
     
     public Transaction validateTransaction(UUID userId, UUID transactionId) {
-        return transactionRepository
-                .findByIdAndAccountItemUsuarioId(transactionId, userId)
-                .orElseThrow(() -> new AccessDeniedException("Transação não encontrada."));
+        return resourceAuthorizationService.validateTransaction(userId, transactionId);
     }
     
     public Category validateCategory(UUID userId, UUID categoryId) {
-        return categoryRepository.findAccessibleById(categoryId, userId)
-                .orElseThrow(() -> new AccessDeniedException("Categoria não encontrada."));
+        return resourceAuthorizationService.validateCategory(userId, categoryId);
     }
 
-    private String cacheKey(UUID userId, UUID resourceId) {
-        return userId + ":" + resourceId;
-    }
-
-    private String hashToken(String rawToken) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 indisponivel.", exception);
-        }
-    }
-    
     @Transactional
     public AuthenticatedSession refresh(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
