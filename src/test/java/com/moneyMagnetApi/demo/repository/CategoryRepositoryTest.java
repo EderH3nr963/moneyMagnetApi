@@ -16,8 +16,13 @@ import com.moneyMagnetApi.demo.dto.dashboard.response.CategoryExpenseResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -28,6 +33,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 @DataJpaTest
 @ActiveProfiles("test")
+@Testcontainers
+@AutoConfigureTestDatabase(
+        replace = AutoConfigureTestDatabase.Replace.NONE
+)
 class CategoryRepositoryTest {
 
     private static final LocalDateTime START_DATE =
@@ -40,6 +49,11 @@ class CategoryRepositoryTest {
 
     @Autowired
     private CategoryRepository categoryRepository;
+    
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres =
+            new PostgreSQLContainer<>("postgres:17-alpine");
 
     @Test
     void shouldGroupExpensesByCategoryAndOrderByHighestAmount() {

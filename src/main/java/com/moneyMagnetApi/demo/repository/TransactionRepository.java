@@ -32,14 +32,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         JOIN accounts a ON a.id = t.account_id
                         JOIN items i ON i.id = a.item_id
                         WHERE i.user_id = :userId
-                          AND t.nature IN (:natures)
+                          AND CAST(t.nature AS text) IN (:natures)
                           AND (:accountId IS NULL OR t.account_id = :accountId)
-                          AND (:startDate IS NULL OR CAST(t.payment_date AS date) >= :startDate)
-                          AND (:endDate IS NULL OR CAST(t.payment_date AS date) <= :endDate)
+                          AND (CAST(:startDate AS date) IS NULL
+                               OR CAST(t.payment_date AS date) >= CAST(:startDate AS date))
+                          AND (CAST(:endDate AS date) IS NULL
+                               OR CAST(t.payment_date AS date) <= CAST(:endDate AS date))
                           AND (
-                            :search IS NULL OR
+                            CAST(:search AS text) IS NULL OR
                             to_tsvector('portuguese', coalesce(t.description, ''))
-                              @@ websearch_to_tsquery('portuguese', :search)
+                              @@ websearch_to_tsquery('portuguese', CAST(:search AS text))
                           )
                         ORDER BY t.payment_date DESC
                         """,
@@ -49,14 +51,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         JOIN accounts a ON a.id = t.account_id
                         JOIN items i ON i.id = a.item_id
                         WHERE i.user_id = :userId
-                          AND t.nature IN (:natures)
+                          AND CAST(t.nature AS text) IN (:natures)
                           AND (:accountId IS NULL OR t.account_id = :accountId)
-                          AND (:startDate IS NULL OR CAST(t.payment_date AS date) >= :startDate)
-                          AND (:endDate IS NULL OR CAST(t.payment_date AS date) <= :endDate)
+                          AND (CAST(:startDate AS date) IS NULL
+                               OR CAST(t.payment_date AS date) >= CAST(:startDate AS date))
+                          AND (CAST(:endDate AS date) IS NULL
+                               OR CAST(t.payment_date AS date) <= CAST(:endDate AS date))
                           AND (
-                            :search IS NULL OR
+                            CAST(:search AS text) IS NULL OR
                             to_tsvector('portuguese', coalesce(t.description, ''))
-                              @@ websearch_to_tsquery('portuguese', :search)
+                              @@ websearch_to_tsquery('portuguese', CAST(:search AS text))
                           )
                         """,
                 nativeQuery = true
