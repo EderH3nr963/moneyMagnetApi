@@ -44,8 +44,8 @@ public class TransactionController {
                         @Parameter(description = "Data inicial no formato yyyy-MM-dd") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
                         @Parameter(description = "Data final no formato yyyy-MM-dd") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
                         @Parameter(description = "Id da conta bancária") @RequestParam(required = false) UUID accountId,
-
-                        @ParameterObject @PageableDefault(page = 0, size = 20, sort = "paymentDate", direction = Sort.Direction.DESC) Pageable pageable) {
+                        @Parameter(description = "Pesquisar transações pela descrição") @RequestParam(required = false) String search,
+                        @ParameterObject @PageableDefault(page = 0, size = 20, direction = Sort.Direction.DESC) Pageable pageable) {
                 if (pageable.getPageSize() > 50)
                         throw new BusinessException("Tamanho máximo de paginação é de 50", HttpStatus.BAD_REQUEST);
 
@@ -55,6 +55,7 @@ public class TransactionController {
                                                 startDate,
                                                 endDate,
                                                 accountId,
+                                                search,
                                                 pageable));
         }
 
