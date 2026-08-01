@@ -21,6 +21,8 @@ public record AccountResponse(
         BigDecimal balance,
         BigDecimal creditLimit,
         String number,
+        LocalDateTime lastTransactionSync,
+        LocalDateTime lastAccountSync,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -39,6 +41,8 @@ public record AccountResponse(
                 account.getBalance(),
                 account.getCreditLimit(),
                 account.getNumber(),
+                account.getLastTransactionSync(),
+                account.getLastAccountSync(),
                 account.getCreatedAt(),
                 account.getUpdatedAt()
         );
