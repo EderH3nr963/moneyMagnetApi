@@ -1,6 +1,7 @@
 package com.moneyMagnetApi.demo.controller;
 
 import com.moneyMagnetApi.demo.dto.transaction.response.TransactionResponse;
+import com.moneyMagnetApi.demo.dto.usuario.response.ApiError;
 import com.moneyMagnetApi.demo.exception.BusinessException;
 import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
 import com.moneyMagnetApi.demo.service.TransactionService;
