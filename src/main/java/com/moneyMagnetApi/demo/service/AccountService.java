@@ -36,6 +36,11 @@ public class AccountService {
 
     private List<AccountResponse> loadAll(UUID userId) {
         List<Account> accounts = accountRepository.findAllByItemUsuarioIdOrderByNameAsc(userId);
+        Set<UUID> staleItemIds = findStaleItemIds(accounts);
+
+        staleItemIds.forEach(itemId -> accountSyncService.syncItem(userId, itemId));
+        
+        accounts.stream().filter(this::shouldSyncTransaction).forEach(transactionSyncService::syncTransactions);
 
         return accounts
                 .stream()
@@ -52,12 +57,32 @@ public class AccountService {
 
         List<Account> accounts =
                 accountRepository.findAllByItemIdAndItemUsuarioIdOrderByNameAsc(itemId, userId);
-        
+
+        if (accounts.stream().anyMatch(this::shouldSync)) {
+            accountSyncService.syncItem(userId, itemId);
+        }
 
         return accounts
                 .stream()
                 .map(AccountResponse::fromAccount)
                 .toList();
+    }
+
+    private Set<UUID> findStaleItemIds(List<Account> accounts) {
+        return accounts.stream()
+                .filter(this::shouldSync)
+                .map(account -> account.getItem().getId())
+                .collect(Collectors.toSet());
+    }
+
+    private boolean shouldSync(Account account) {
+        LocalDateTime lastSync = account.getLastAccountSync();
+        return lastSync == null || lastSync.isBefore(LocalDateTime.now().minusHours(6));
+    }
+    
+    private boolean shouldSyncTransaction(Account account) {
+        LocalDateTime lastSync = account.getLastAccountSync();
+        return lastSync == null || lastSync.isBefore(LocalDateTime.now().minusHours(6));
     }
 
     @Transactional(readOnly = true)
@@ -67,6 +92,8 @@ public class AccountService {
 
     private AccountResponse loadById(UUID userId, UUID accountId) {
         Account account = authorizationService.validateAccount(userId, accountId);
+        
+        if (shouldSync(account)) accountSyncService.syncItem(userId, account.getItem().getId());
         
         return AccountResponse.fromAccount(
                 account
