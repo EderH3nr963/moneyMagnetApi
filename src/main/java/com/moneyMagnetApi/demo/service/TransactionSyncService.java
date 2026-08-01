@@ -7,8 +7,11 @@ import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyTransactionResponse;
 import com.moneyMagnetApi.demo.repository.AccountRepository;
 import com.moneyMagnetApi.demo.repository.TransactionRepository;
+import com.moneyMagnetApi.demo.security.UsuarioDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -48,6 +51,7 @@ public class TransactionSyncService {
     }
 
     private int syncTransactionsInternal(Account account) {
+        
         if (account == null) {
             throw new IllegalArgumentException("Conta nao informada.");
         }

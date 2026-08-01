@@ -38,13 +38,6 @@ public class TransactionService {
     private final Cache<String, TransactionResponse> transactionByIdCache;
     private final AppCacheInvalidationService cacheInvalidationService;
     
-    private boolean shouldSync(Account account) {
-        LocalDateTime lastSync = account.getLastTransactionSync();
-        
-        return lastSync == null
-                || lastSync.isBefore(LocalDateTime.now().minusHours(6));
-    }
-    
     @Transactional(readOnly = true)
     public Page<TransactionResponse> findAll(
             UUID userId,
@@ -57,16 +50,7 @@ public class TransactionService {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("A data inicial nao pode ser maior que a data final.");
         }
-
-        List<Account> accounts =
-                accountRepository.findAllByItemUsuarioIdOrderByNameAsc(userId);
         
-        for (Account account : accounts) {
-            if (shouldSync(account)) {
-                transactionSyncService.syncTransactions(account);
-            }
-        }
-
         return transactionsPageCache.get(
                 transactionPageCacheKey(userId, startDate, endDate, accountId, pageable, search),
                 key -> loadTransactionsPage(userId, startDate, endDate, accountId, search, pageable)
@@ -81,7 +65,6 @@ public class TransactionService {
             String search,
             Pageable pageable
     ) {
-
         Page<Transaction> transactions;
         
         transactions = transactionRepository.findWithFilters(
@@ -109,9 +92,6 @@ public class TransactionService {
                 .findByIdAndItemUsuarioId(accountId, userId)
                 .orElseThrow(() ->
                         new IllegalArgumentException("Conta não encontrada."));
-        
-        if (shouldSync(account))
-            transactionSyncService.syncTransactions(account);
         
         List<Transaction> transactions =
                 transactionRepository.findAllByAccountAndNatureIn(

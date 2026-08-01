@@ -77,12 +77,6 @@ public class Account {
     @Column(length = 30)
     private String number;
     
-    @Column(name = "last_transaction_sync")
-    private LocalDateTime lastTransactionSync;
-    
-    @Column(name = "last_account_sync")
-    private LocalDateTime lastAccountSync;
-    
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
