@@ -18,8 +18,6 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     Optional<Account> findByPluggyAccountId(String accountId);
 
-    List<Account> findAllByItemIdAndPluggyAccountIdIn(UUID itemId, Collection<String> pluggyAccountIds);
-
     List<Account> findAllByItemId(UUID itemId);
 
     @Query(value = """
@@ -30,7 +28,18 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     Set<String> findExistingPluggyAccountIdsIncludingDeleted(
             @Param("pluggyAccountIds") Collection<String> pluggyAccountIds
     );
-
+    
+    @Query(value = """
+        SELECT a
+        FROM Account a
+        WHERE a.item.id = :itemId
+          AND a.pluggyAccountId IN :pluggyAccountIds
+    """)
+    List<Account> findAllByItemIdAndPluggyAccountIdIn(
+            @Param("itemId") UUID itemId,
+            @Param("pluggyAccountIds") Collection<String> pluggyAccountIds
+    );
+    
     @EntityGraph(attributePaths = {"item", "item.institution"})
     List<Account> findAllByItemUsuarioIdOrderByNameAsc(UUID userId);
 

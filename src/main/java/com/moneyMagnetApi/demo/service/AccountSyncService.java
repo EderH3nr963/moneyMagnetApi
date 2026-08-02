@@ -62,19 +62,14 @@ public class AccountSyncService {
                     .filter(StringUtils::hasText)
                     .collect(Collectors.toSet());
             
-            Map<String, Account> accountsByPluggyId;
-            Set<String> existingPluggyAccountIds;
-            if (pluggyAccountIds.isEmpty()) {
-                accountsByPluggyId = Map.of();
-                existingPluggyAccountIds = Set.of();
-            } else {
-                accountsByPluggyId = accountRepository
-                        .findAllByItemIdAndPluggyAccountIdIn(item.getId(), pluggyAccountIds)
-                        .stream()
-                        .collect(Collectors.toMap(Account::getPluggyAccountId, Function.identity()));
-                existingPluggyAccountIds = accountRepository
-                        .findExistingPluggyAccountIdsIncludingDeleted(pluggyAccountIds);
-            }
+            Map<String, Account> accountsByPluggyId =
+                    pluggyAccountIds.isEmpty() ?
+                            accountsByPluggyId = Map.of() :
+                            accountRepository
+                                .findAllByItemIdAndPluggyAccountIdIn(item.getId(), pluggyAccountIds)
+                                .stream()
+                                .collect(Collectors.toMap(Account::getPluggyAccountId, Function.identity()));
+
             
             for (PluggyAccountResponse response : pluggyAccounts) {
                 if (!StringUtils.hasText(response.id())) {
@@ -83,9 +78,6 @@ public class AccountSyncService {
                 
                 Account account = accountsByPluggyId.get(response.id());
                 if (account == null) {
-                    if (existingPluggyAccountIds.contains(response.id())) {
-                        continue;
-                    }
                     account = new Account();
                     account.setPluggyAccountId(response.id());
                 }
