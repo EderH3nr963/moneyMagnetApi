@@ -30,7 +30,7 @@ public class TransactionService {
     
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
-    private final AuthorizationService authorizationService;
+    private final ResourceAuthorizationService resourceAuthorizationService;
     private final Cache<String, Page<TransactionResponse>> transactionsPageCache;
     private final Cache<String, TransactionResponse> transactionByIdCache;
     private final AppCacheInvalidationService cacheInvalidationService;
@@ -89,14 +89,14 @@ public class TransactionService {
             UUID categoryId
     ) {
         
-        Transaction transaction = authorizationService.validateTransaction(userId, transactionId);
+        Transaction transaction = resourceAuthorizationService.validateTransaction(userId, transactionId);
         
         if (StringUtils.hasText(description)) {
             transaction.setDescription(description.trim());
         }
         
         if (categoryId != null) {
-            Category category = authorizationService.validateCategory(userId, categoryId);
+            Category category = resourceAuthorizationService.validateCategory(userId, categoryId);
             
             transaction.setCategory(category);
         }
@@ -107,26 +107,13 @@ public class TransactionService {
         return TransactionResponse.fromResponse(transaction);
     }
     
-    @Transactional(readOnly = true)
-    public TransactionResponse findById(UUID userId, UUID transactionId) {
-        return transactionByIdCache.get(cacheKey(userId, transactionId), key -> {
-            Transaction transaction = authorizationService.validateTransaction(userId, transactionId);
-
-            return TransactionResponse.fromResponse(transaction);
-        });
-    }
-    
     @Transactional
     public void delete(UUID userId, UUID transactionId) {
         
-        Transaction transaction = authorizationService.validateTransaction(userId, transactionId);
+        Transaction transaction = resourceAuthorizationService.validateTransaction(userId, transactionId);
         
         transactionRepository.delete(transaction);
         cacheInvalidationService.invalidateTransactions();
-    }
-
-    private String cacheKey(UUID userId, UUID resourceId) {
-        return userId + ":" + resourceId;
     }
 
     private String transactionPageCacheKey(

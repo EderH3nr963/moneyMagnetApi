@@ -29,24 +29,15 @@ public class AccountSyncService {
     
     private final ConcurrentHashMap<String, Boolean> syncingItems = new ConcurrentHashMap<>();
     
-    private final AuthorizationService authorizationService;
+    private final ResourceAuthorizationService resourceAuthorizationService;
     private final PluggyClient pluggyClient;
     private final AccountRepository accountRepository;
     private final AppCacheInvalidationService cacheInvalidationService;
+
     
     @Transactional
-    @Async
-    public void syncItem(UUID userId, UUID itemId) {
-        syncItemInternal(userId, itemId);
-    }
-
-    @Transactional
-    public List<Account> syncItemNow(UUID userId, UUID itemId) {
-        return syncItemInternal(userId, itemId);
-    }
-
-    private List<Account> syncItemInternal(UUID userId, UUID itemId) {
-        Item item = authorizationService.validateItem(userId, itemId);
+    public List<Account> syncAccountsByItem(UUID userId, UUID itemId) {
+        Item item = resourceAuthorizationService.validateItem(userId, itemId);
 
         if (syncingItems.putIfAbsent(itemId.toString(), true) != null) {
             return List.of();

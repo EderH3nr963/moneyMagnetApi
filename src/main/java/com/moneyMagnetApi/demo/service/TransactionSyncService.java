@@ -8,7 +8,6 @@ import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyTransactionResponse;
 import com.moneyMagnetApi.demo.repository.AccountRepository;
 import com.moneyMagnetApi.demo.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -35,12 +34,6 @@ public class TransactionSyncService {
     private final MerchantCategoryRuleService merchantCategoryRuleService;
     private final AppCacheInvalidationService cacheInvalidationService;
     private final PluggyTransactionMapper transactionMapper;
-
-    @Transactional
-    @Async
-    public void syncTransactions(Account account) {
-        syncTransactionsInternal(account);
-    }
 
     @Transactional
     public int syncTransactionsNow(Account account) {
@@ -77,18 +70,19 @@ public class TransactionSyncService {
                             Function.identity()));
 
             Map<String, Category> mapCategories = categoryMappingService.getCategories();
+            
+            // Regras de merchant
             UUID userId = account.getItem().getUsuario().getId();
             Map<String, Category> merchantRules = merchantCategoryRuleService.getActiveRulesByMerchant(userId);
 
             for (PluggyTransactionResponse dto : transactions) {
-                if (!StringUtils.hasText(dto.id())) {
+                if (!StringUtils.hasText(dto.id()) || existing.containsKey(dto.id())) {
                     continue;
                 }
 
-                Transaction transaction = existing.getOrDefault(dto.id(), new Transaction());
+                Transaction transaction = new Transaction();
 
                 Category category = mapCategories.get(dto.categoryId());
-
                 if (category == null) {
                     category = mapCategories.get("99999999");
                 }

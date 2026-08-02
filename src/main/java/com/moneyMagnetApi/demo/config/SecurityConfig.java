@@ -3,6 +3,7 @@ package com.moneyMagnetApi.demo.config;
 import com.moneyMagnetApi.demo.security.AuditLogFilter;
 import com.moneyMagnetApi.demo.security.JwtFilter;
 import com.moneyMagnetApi.demo.security.RateLimitFilter;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -43,6 +44,7 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/health").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/webhooks/pluggy/**").permitAll()

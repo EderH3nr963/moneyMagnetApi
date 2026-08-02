@@ -6,6 +6,7 @@ import com.moneyMagnetApi.demo.domain.category.PluggyCategoryMapping;
 import com.moneyMagnetApi.demo.repository.PluggyCategoryMappingRepository;
 import com.moneyMagnetApi.demo.repository.PluggyCategoryRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +15,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CategoryMappingService {
     
     private final PluggyCategoryRepository pluggyCategoryRepository;
@@ -28,14 +30,12 @@ public class CategoryMappingService {
     private Map<String, Category> loadCategories() {
         List<PluggyCategoryMapping> mappings = pluggyCategoryMappingRepository.findAll();
         
-        Map<String, Category> mappedCategories = mappings.stream()
-                .collect(Collectors.toMap(
-                        mapping -> mapping
-                                .getPluggyCategory()
-                                .getPluggyCategoryId(),
-                        PluggyCategoryMapping::getCategory
-                ));
-        
-        return mappedCategories;
+        return mappings.stream()
+            .collect(Collectors.toMap(
+                    mapping -> mapping
+                            .getPluggyCategory()
+                            .getPluggyCategoryId(),
+                    PluggyCategoryMapping::getCategory
+            ));
     }
 }

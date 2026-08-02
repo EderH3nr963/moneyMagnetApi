@@ -4,6 +4,8 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
+import com.moneyMagnetApi.demo.service.DashboardSseService;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
@@ -33,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 public class DashboardController {
 
     private final DashboardService dashboardService;
+    private final DashboardSseService dashboardSseService;
 
     @GetMapping
     @Operation(
@@ -114,5 +118,17 @@ public class DashboardController {
                 referenceMonth,
                 months
         );
+    }
+    
+    @GetMapping(
+            value = "/events",
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    @Operation(
+            summary = "Envia eventos para o dashboard.",
+            description = "SSE para eventos no dashboard emitidos pelos webhooks."
+    )
+    public SseEmitter events(@AuthenticationPrincipal UsuarioDetailsImpl usuarioDetails ) {
+        return dashboardSseService.subscribe(usuarioDetails.getId());
     }
 }

@@ -4,28 +4,33 @@ import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.institution.Institution;
 import com.moneyMagnetApi.demo.domain.item.Item;
 import com.moneyMagnetApi.demo.domain.usuario.Usuario;
-import com.moneyMagnetApi.demo.dto.item.request.CreateItemRequest;
-import com.moneyMagnetApi.demo.dto.item.response.ItemSyncResponse;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyConnectorResponse;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyItemResponse;
-import com.moneyMagnetApi.demo.exception.BusinessException;
+import com.moneyMagnetApi.demo.dto.webhook.requests.ItemCreatedDTO;
+import com.moneyMagnetApi.demo.dto.webhook.requests.ItemUpdatedDTO;
 import com.moneyMagnetApi.demo.repository.InstitutionRepository;
 import com.moneyMagnetApi.demo.repository.ItemRepository;
 import com.moneyMagnetApi.demo.repository.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class ItemService {
+
+    public static final String ITEM_CREATED_UPDATED_EVENT = "ITEM_CREATED_UPDATED";
 
     private static final Set<String> SYNCHRONIZABLE_STATUSES =
             Set.of("SUCCESS", "PARTIAL_SUCCESS");
@@ -37,64 +42,47 @@ public class ItemService {
     private final AccountSyncService accountSyncService;
     private final TransactionSyncService transactionSyncService;
     private final AppCacheInvalidationService cacheInvalidationService;
+    private final DashboardSseService dashboardSseService;
+    private final @Qualifier("transactionSyncExecutor") Executor transactionSyncExecutor;
 
-    public ItemSyncResponse createAndSync(UUID usuarioId, CreateItemRequest request) {
-        String pluggyItemId = request.pluggyItemId().toString();
+    @Async("webhookTaskExecutor")
+    public void itemCreated(ItemCreatedDTO dto) {
+        String pluggyItemId = dto.itemId();
+        UUID usuarioId = UUID.fromString(dto.clientUserId());
+        
         PluggyItemResponse pluggyItem = pluggyClient.getItem(pluggyItemId);
-
-        validatePluggyItem(usuarioId, pluggyItemId, pluggyItem);
 
         Institution institution = upsertInstitution(pluggyItem.connector());
         Item item = upsertItem(usuarioId, pluggyItem, institution);
 
-        List<Account> accounts = accountSyncService.syncItemNow(usuarioId, item.getId());
-        int transactionsSynced = accounts.stream()
-                .mapToInt(transactionSyncService::syncTransactionsNow)
-                .sum();
+        List<Account> accounts = accountSyncService.syncAccountsByItem(usuarioId, item.getId());
+        syncTransactionsInParallel(accounts);
+        
         cacheInvalidationService.invalidateUserData(usuarioId);
-
-        return new ItemSyncResponse(
-                item.getId(),
-                item.getPluggyItemId(),
-                item.getStatus(),
-                item.getExecutionStatus(),
-                accounts.size(),
-                transactionsSynced
-        );
+        
+        dashboardSseService.emitToUser(usuarioId, ITEM_CREATED_UPDATED_EVENT,
+                Map.of("status", "synchronized"));
+    }
+    
+    @Async("webhookTaskExecutor")
+    public void itemUpdated(ItemUpdatedDTO dto) {
+        List<Account> accounts = accountSyncService.syncAccountsByItem(UUID.fromString(dto.clientUserId()), UUID.fromString(dto.itemId()));
+        
+        syncTransactionsInParallel(accounts);
+        cacheInvalidationService.invalidateUserData(UUID.fromString(dto.clientUserId()));
+        
+        dashboardSseService.emitToUser(UUID.fromString(dto.clientUserId()), ITEM_CREATED_UPDATED_EVENT,
+                Map.of("status", "synchronized"));
     }
 
-    private void validatePluggyItem(
-            UUID usuarioId,
-            String requestedItemId,
-            PluggyItemResponse pluggyItem
-    ) {
-        if (!requestedItemId.equals(pluggyItem.id())) {
-            throw new BusinessException(
-                    "O Item retornado pela Pluggy nao corresponde ao Item solicitado.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        }
+    void syncTransactionsInParallel(List<Account> accounts) {
+        CompletableFuture<?>[] synchronizations = accounts.stream()
+                .map(account -> CompletableFuture.runAsync(
+                        () -> transactionSyncService.syncTransactionsNow(account),
+                        transactionSyncExecutor))
+                .toArray(CompletableFuture[]::new);
 
-        if (!usuarioId.toString().equals(pluggyItem.clientUserId())) {
-            throw new AccessDeniedException("O Item da Pluggy nao pertence ao usuario autenticado.");
-        }
-
-        if (!StringUtils.hasText(pluggyItem.executionStatus())
-                || !SYNCHRONIZABLE_STATUSES.contains(pluggyItem.executionStatus())) {
-            throw new BusinessException(
-                    "O Item ainda nao terminou a sincronizacao na Pluggy. Status: "
-                            + pluggyItem.executionStatus(),
-                    HttpStatus.CONFLICT
-            );
-        }
-
-        PluggyConnectorResponse connector = pluggyItem.connector();
-        if (connector == null || connector.id() == null || !StringUtils.hasText(connector.name())) {
-            throw new BusinessException(
-                    "A Pluggy nao retornou os dados da instituicao do Item.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        }
+        CompletableFuture.allOf(synchronizations).join();
     }
 
     private Institution upsertInstitution(PluggyConnectorResponse connector) {

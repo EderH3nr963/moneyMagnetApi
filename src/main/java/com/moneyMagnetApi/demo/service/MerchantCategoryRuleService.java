@@ -31,7 +31,7 @@ public class MerchantCategoryRuleService {
     private final MerchantCategoryRuleRepository merchantCategoryRuleRepository;
     private final TransactionRepository transactionRepository;
     private final UsuarioRepository usuarioRepository;
-    private final AuthorizationService authorizationService;
+    private final ResourceAuthorizationService resourceAuthorizationService;
     private final Cache<UUID, List<MerchantCategoryRuleResponse>> merchantCategoryRulesByUserCache;
     private final Cache<UUID, Map<String, Category>> activeMerchantCategoryRulesByUserCache;
 
@@ -39,7 +39,7 @@ public class MerchantCategoryRuleService {
     public MerchantCategoryRuleResponse create(UUID userId, CreateMerchantCategoryRuleRequest request) {
         Usuario usuario = usuarioRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario nao encontrado"));
-        Category category = authorizationService.validateCategory(userId, request.categoryId());
+        Category category = resourceAuthorizationService.validateCategory(userId, request.categoryId());
 
         String merchant = request.merchant().trim();
         String normalizedMerchant = normalizeMerchant(merchant);
@@ -82,7 +82,7 @@ public class MerchantCategoryRuleService {
     ) {
         MerchantCategoryRule rule = merchantCategoryRuleRepository.findByIdAndUsuarioId(ruleId, userId)
                 .orElseThrow(() -> new EntityNotFoundException("Regra de merchant nao encontrada"));
-        Category category = authorizationService.validateCategory(userId, request.categoryId());
+        Category category = resourceAuthorizationService.validateCategory(userId, request.categoryId());
 
         rule.setCategory(category);
         if (request.active() != null) {
