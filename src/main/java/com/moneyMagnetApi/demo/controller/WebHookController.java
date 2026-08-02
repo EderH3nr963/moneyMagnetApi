@@ -31,7 +31,7 @@ public class WebHookController {
         return ResponseEntity.noContent().build();
     }
     
-    @PostMapping("/item-updated")
+    @PostMapping("/item-created")
     @Operation(summary = "Recebe o evento item/created",
             responses = @ApiResponse(responseCode = "204", description = "Evento aceito"))
     public ResponseEntity<Void> itemCreated(@Valid @RequestBody ItemCreatedDTO dto) {
@@ -39,11 +39,11 @@ public class WebHookController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/transactions-created")
-    @Operation(summary = "Recebe o evento transactions/created",
-            responses = @ApiResponse(responseCode = "204", description = "Evento aceito"))
-    public ResponseEntity<Void> transactionsCreated(@Valid @RequestBody TransactionCreatedDTO dto) {
-        webHookService.transactionCreated(dto);
-        return ResponseEntity.noContent().build();
-    }
+//    @PostMapping("/transactions-created")
+//    @Operation(summary = "Recebe o evento transactions/created",
+//            responses = @ApiResponse(responseCode = "204", description = "Evento aceito"))
+//    public ResponseEntity<Void> transactionsCreated(@Valid @RequestBody TransactionCreatedDTO dto) {
+//        webHookService.transactionCreated(dto);
+//        return ResponseEntity.noContent().build();
+//    }
 }

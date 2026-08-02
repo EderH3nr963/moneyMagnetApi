@@ -8,7 +8,6 @@ import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyTransactionResponse;
 import com.moneyMagnetApi.demo.repository.AccountRepository;
 import com.moneyMagnetApi.demo.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -35,12 +34,6 @@ public class TransactionSyncService {
     private final MerchantCategoryRuleService merchantCategoryRuleService;
     private final AppCacheInvalidationService cacheInvalidationService;
     private final PluggyTransactionMapper transactionMapper;
-
-    @Transactional
-    @Async
-    public void syncTransactions(Account account) {
-        syncTransactionsInternal(account);
-    }
 
     @Transactional
     public int syncTransactionsNow(Account account) {
@@ -90,8 +83,6 @@ public class TransactionSyncService {
                 Transaction transaction = new Transaction();
 
                 Category category = mapCategories.get(dto.categoryId());
-                System.out.println(dto.categoryId());
-
                 if (category == null) {
                     category = mapCategories.get("99999999");
                 }

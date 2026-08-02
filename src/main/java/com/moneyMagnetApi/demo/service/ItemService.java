@@ -17,13 +17,20 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import org.springframework.beans.factory.annotation.Qualifier;
+
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class ItemService {
+
+    public static final String ITEM_CREATED_UPDATED_EVENT = "ITEM_CREATED_UPDATED";
 
     private static final Set<String> SYNCHRONIZABLE_STATUSES =
             Set.of("SUCCESS", "PARTIAL_SUCCESS");
@@ -35,8 +42,10 @@ public class ItemService {
     private final AccountSyncService accountSyncService;
     private final TransactionSyncService transactionSyncService;
     private final AppCacheInvalidationService cacheInvalidationService;
+    private final DashboardSseService dashboardSseService;
+    private final @Qualifier("transactionSyncExecutor") Executor transactionSyncExecutor;
 
-    @Async
+    @Async("webhookTaskExecutor")
     public void itemCreated(ItemCreatedDTO dto) {
         String pluggyItemId = dto.itemId();
         UUID usuarioId = UUID.fromString(dto.clientUserId());
@@ -47,18 +56,33 @@ public class ItemService {
         Item item = upsertItem(usuarioId, pluggyItem, institution);
 
         List<Account> accounts = accountSyncService.syncAccountsByItem(usuarioId, item.getId());
-        accounts.forEach(transactionSyncService::syncTransactions);
+        syncTransactionsInParallel(accounts);
         
         cacheInvalidationService.invalidateUserData(usuarioId);
+        
+        dashboardSseService.emitToUser(usuarioId, ITEM_CREATED_UPDATED_EVENT,
+                Map.of("status", "synchronized"));
     }
     
-    @Async
+    @Async("webhookTaskExecutor")
     public void itemUpdated(ItemUpdatedDTO dto) {
         List<Account> accounts = accountSyncService.syncAccountsByItem(UUID.fromString(dto.clientUserId()), UUID.fromString(dto.itemId()));
         
-        for (Account account: accounts) {
-            transactionSyncService.syncTransactions(account);
-        }
+        syncTransactionsInParallel(accounts);
+        cacheInvalidationService.invalidateUserData(UUID.fromString(dto.clientUserId()));
+        
+        dashboardSseService.emitToUser(UUID.fromString(dto.clientUserId()), ITEM_CREATED_UPDATED_EVENT,
+                Map.of("status", "synchronized"));
+    }
+
+    void syncTransactionsInParallel(List<Account> accounts) {
+        CompletableFuture<?>[] synchronizations = accounts.stream()
+                .map(account -> CompletableFuture.runAsync(
+                        () -> transactionSyncService.syncTransactionsNow(account),
+                        transactionSyncExecutor))
+                .toArray(CompletableFuture[]::new);
+
+        CompletableFuture.allOf(synchronizations).join();
     }
 
     private Institution upsertInstitution(PluggyConnectorResponse connector) {
