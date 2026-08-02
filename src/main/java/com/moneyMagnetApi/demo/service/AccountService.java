@@ -9,13 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,11 +31,6 @@ public class AccountService {
 
     private List<AccountResponse> loadAll(UUID userId) {
         List<Account> accounts = accountRepository.findAllByItemUsuarioIdOrderByNameAsc(userId);
-        Set<UUID> staleItemIds = findStaleItemIds(accounts);
-
-        staleItemIds.forEach(itemId -> accountSyncService.syncItem(userId, itemId));
-        
-        accounts.stream().filter(this::shouldSyncTransaction).forEach(transactionSyncService::syncTransactions);
 
         return accounts
                 .stream()
@@ -58,46 +48,10 @@ public class AccountService {
         List<Account> accounts =
                 accountRepository.findAllByItemIdAndItemUsuarioIdOrderByNameAsc(itemId, userId);
 
-        if (accounts.stream().anyMatch(this::shouldSync)) {
-            accountSyncService.syncItem(userId, itemId);
-        }
-
         return accounts
                 .stream()
                 .map(AccountResponse::fromAccount)
                 .toList();
-    }
-
-    private Set<UUID> findStaleItemIds(List<Account> accounts) {
-        return accounts.stream()
-                .filter(this::shouldSync)
-                .map(account -> account.getItem().getId())
-                .collect(Collectors.toSet());
-    }
-
-    private boolean shouldSync(Account account) {
-        LocalDateTime lastSync = account.getLastAccountSync();
-        return lastSync == null || lastSync.isBefore(LocalDateTime.now().minusHours(6));
-    }
-    
-    private boolean shouldSyncTransaction(Account account) {
-        LocalDateTime lastSync = account.getLastAccountSync();
-        return lastSync == null || lastSync.isBefore(LocalDateTime.now().minusHours(6));
-    }
-
-    @Transactional(readOnly = true)
-    public AccountResponse findById(UUID userId, UUID accountId) {
-        return accountByIdCache.get(cacheKey(userId, accountId), key -> loadById(userId, accountId));
-    }
-
-    private AccountResponse loadById(UUID userId, UUID accountId) {
-        Account account = authorizationService.validateAccount(userId, accountId);
-        
-        if (shouldSync(account)) accountSyncService.syncItem(userId, account.getItem().getId());
-        
-        return AccountResponse.fromAccount(
-                account
-        );
     }
 
     @Transactional

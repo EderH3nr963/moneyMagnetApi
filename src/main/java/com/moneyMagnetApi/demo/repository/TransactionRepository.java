@@ -107,8 +107,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         @Param("natures") List<TransactionNature> natures,
                         Pageable pageable);
 
-        List<Transaction> findAllByAccountAndNatureIn(
-                        Account account,
+        List<Transaction> findAllByAccountIdAndNatureIn(
+                        UUID accountId,
                         List<TransactionNature> natures);
 
         List<Transaction> findAllByAccountItemUsuarioIdAndMerchantIsNotNull(UUID userId);
