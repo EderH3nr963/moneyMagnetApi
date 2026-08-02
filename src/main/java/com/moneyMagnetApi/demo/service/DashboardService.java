@@ -1,7 +1,6 @@
 package com.moneyMagnetApi.demo.service;
 
 import com.moneyMagnetApi.demo.config.CacheConfig;
-import com.moneyMagnetApi.demo.domain.transaction.Transaction;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionStatus;
 import com.moneyMagnetApi.demo.domain.account.AccountType;

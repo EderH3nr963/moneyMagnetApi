@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,18 +31,9 @@ public class TransactionService {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final AuthorizationService authorizationService;
-    private final TransactionSyncService transactionSyncService;
     private final Cache<String, Page<TransactionResponse>> transactionsPageCache;
-    private final Cache<String, List<TransactionResponse>> transactionsByAccountCache;
     private final Cache<String, TransactionResponse> transactionByIdCache;
     private final AppCacheInvalidationService cacheInvalidationService;
-    
-    private boolean shouldSync(Account account) {
-        LocalDateTime lastSync = account.getLastTransactionSync();
-        
-        return lastSync == null
-                || lastSync.isBefore(LocalDateTime.now().minusHours(6));
-    }
     
     @Transactional(readOnly = true)
     public Page<TransactionResponse> findAll(
@@ -60,12 +50,6 @@ public class TransactionService {
 
         List<Account> accounts =
                 accountRepository.findAllByItemUsuarioIdOrderByNameAsc(userId);
-        
-        for (Account account : accounts) {
-            if (shouldSync(account)) {
-                transactionSyncService.syncTransactions(account);
-            }
-        }
 
         return transactionsPageCache.get(
                 transactionPageCacheKey(userId, startDate, endDate, accountId, pageable, search),
@@ -95,31 +79,6 @@ public class TransactionService {
         );
         
         return transactions.map(TransactionResponse::fromResponse);
-    }
-
-    
-    @Transactional(readOnly = true)
-    public List<TransactionResponse> findByAccount(UUID userId, UUID accountId) {
-        return transactionsByAccountCache.get(cacheKey(userId, accountId), key -> loadByAccount(userId, accountId));
-    }
-
-    private List<TransactionResponse> loadByAccount(UUID userId, UUID accountId) {
-        
-        Account account = accountRepository
-                .findByIdAndItemUsuarioId(accountId, userId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Conta não encontrada."));
-        
-        if (shouldSync(account))
-            transactionSyncService.syncTransactions(account);
-        
-        List<Transaction> transactions =
-                transactionRepository.findAllByAccountAndNatureIn(
-                        account,
-                        DEFAULT_NATURES
-                );
-        
-        return transactions.stream().map((transaction) -> TransactionResponse.fromResponse(transaction)).toList();
     }
     
     @Transactional
