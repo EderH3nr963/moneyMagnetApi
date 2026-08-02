@@ -17,7 +17,7 @@ import java.util.UUID;
 public class AccountService {
 
     private final AccountRepository accountRepository;
-    private final AuthorizationService authorizationService;
+    private final ResourceAuthorizationService resourceAuthorizationService;
     private final AccountSyncService accountSyncService;
     private final TransactionSyncService transactionSyncService;
     private final Cache<UUID, List<AccountResponse>> accountsByUserCache;
@@ -43,7 +43,7 @@ public class AccountService {
     }
     
     private List<AccountResponse> loadByItem(UUID userId, UUID itemId) {
-        authorizationService.validateItem(userId, itemId);
+        resourceAuthorizationService.validateItem(userId, itemId);
 
         List<Account> accounts =
                 accountRepository.findAllByItemIdAndItemUsuarioIdOrderByNameAsc(itemId, userId);
@@ -56,7 +56,7 @@ public class AccountService {
 
     @Transactional
     public void delete(UUID userId, UUID accountId) {
-        Account account = authorizationService.validateAccount(userId, accountId);
+        Account account = resourceAuthorizationService.validateAccount(userId, accountId);
         accountRepository.delete(account);
         cacheInvalidationService.invalidateUserData(userId);
     }

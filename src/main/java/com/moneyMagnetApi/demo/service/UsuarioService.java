@@ -70,7 +70,10 @@ public class UsuarioService {
         }
 
         usuario.setUsername(dto.username());
-        requestEmailUpdate(id, new UpdateEmailDTO(dto.email()));
+        
+        if (!usuario.getEmail().equals(dto.email())) {
+            requestEmailUpdate(id, new UpdateEmailDTO(dto.email()));
+        }
 
         return UsuarioResponseDTO.fromUsuario(usuario);
     }
@@ -124,21 +127,6 @@ public class UsuarioService {
         usuarioByIdCache.invalidate(usuario.getId().toString());
         refreshTokenService.revokeAll(usuario);
         updateEmail.setUsedAt(Instant.now());
-    }
-
-    @Transactional
-    public UsuarioResponseDTO updateUsername(UUID id, UpdateUsernameDTO dto) {
-
-        Usuario usuario = findUsuarioOrThrow(id);
-
-        if (!usuario.getUsername().equals(dto.username())
-                && usuarioRepository.existsByUsername(dto.username())) {
-            throw new BusinessException("O nome de usuário informado já está em uso", HttpStatus.CONFLICT);
-        }
-
-        usuario.setUsername(dto.username());
-
-        return UsuarioResponseDTO.fromUsuario(usuario);
     }
 
     @Transactional

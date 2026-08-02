@@ -77,17 +77,20 @@ public class TransactionSyncService {
                             Function.identity()));
 
             Map<String, Category> mapCategories = categoryMappingService.getCategories();
+            
+            // Regras de merchant
             UUID userId = account.getItem().getUsuario().getId();
             Map<String, Category> merchantRules = merchantCategoryRuleService.getActiveRulesByMerchant(userId);
 
             for (PluggyTransactionResponse dto : transactions) {
-                if (!StringUtils.hasText(dto.id())) {
+                if (!StringUtils.hasText(dto.id()) || existing.containsKey(dto.id())) {
                     continue;
                 }
 
-                Transaction transaction = existing.getOrDefault(dto.id(), new Transaction());
+                Transaction transaction = new Transaction();
 
                 Category category = mapCategories.get(dto.categoryId());
+                System.out.println(dto.categoryId());
 
                 if (category == null) {
                     category = mapCategories.get("99999999");

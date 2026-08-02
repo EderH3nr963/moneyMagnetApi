@@ -4,20 +4,18 @@ import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.institution.Institution;
 import com.moneyMagnetApi.demo.domain.item.Item;
 import com.moneyMagnetApi.demo.domain.usuario.Usuario;
-import com.moneyMagnetApi.demo.dto.item.request.CreateItemRequest;
-import com.moneyMagnetApi.demo.dto.item.response.ItemSyncResponse;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyConnectorResponse;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyItemResponse;
-import com.moneyMagnetApi.demo.exception.BusinessException;
+import com.moneyMagnetApi.demo.dto.webhook.requests.ItemCreatedDTO;
+import com.moneyMagnetApi.demo.dto.webhook.requests.ItemUpdatedDTO;
 import com.moneyMagnetApi.demo.repository.InstitutionRepository;
 import com.moneyMagnetApi.demo.repository.ItemRepository;
 import com.moneyMagnetApi.demo.repository.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Set;
@@ -38,62 +36,28 @@ public class ItemService {
     private final TransactionSyncService transactionSyncService;
     private final AppCacheInvalidationService cacheInvalidationService;
 
-    public ItemSyncResponse createAndSync(UUID usuarioId, CreateItemRequest request) {
-        String pluggyItemId = request.pluggyItemId().toString();
+    @Async
+    public void itemCreated(ItemCreatedDTO dto) {
+        String pluggyItemId = dto.itemId();
+        UUID usuarioId = UUID.fromString(dto.clientUserId());
+        
         PluggyItemResponse pluggyItem = pluggyClient.getItem(pluggyItemId);
-
-        validatePluggyItem(usuarioId, pluggyItemId, pluggyItem);
 
         Institution institution = upsertInstitution(pluggyItem.connector());
         Item item = upsertItem(usuarioId, pluggyItem, institution);
 
-        List<Account> accounts = accountSyncService.syncItemNow(usuarioId, item.getId());
-        int transactionsSynced = accounts.stream()
-                .mapToInt(transactionSyncService::syncTransactionsNow)
-                .sum();
+        List<Account> accounts = accountSyncService.syncAccountsByItem(usuarioId, item.getId());
+        accounts.forEach(transactionSyncService::syncTransactions);
+        
         cacheInvalidationService.invalidateUserData(usuarioId);
-
-        return new ItemSyncResponse(
-                item.getId(),
-                item.getPluggyItemId(),
-                item.getStatus(),
-                item.getExecutionStatus(),
-                accounts.size(),
-                transactionsSynced
-        );
     }
-
-    private void validatePluggyItem(
-            UUID usuarioId,
-            String requestedItemId,
-            PluggyItemResponse pluggyItem
-    ) {
-        if (!requestedItemId.equals(pluggyItem.id())) {
-            throw new BusinessException(
-                    "O Item retornado pela Pluggy nao corresponde ao Item solicitado.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        }
-
-        if (!usuarioId.toString().equals(pluggyItem.clientUserId())) {
-            throw new AccessDeniedException("O Item da Pluggy nao pertence ao usuario autenticado.");
-        }
-
-        if (!StringUtils.hasText(pluggyItem.executionStatus())
-                || !SYNCHRONIZABLE_STATUSES.contains(pluggyItem.executionStatus())) {
-            throw new BusinessException(
-                    "O Item ainda nao terminou a sincronizacao na Pluggy. Status: "
-                            + pluggyItem.executionStatus(),
-                    HttpStatus.CONFLICT
-            );
-        }
-
-        PluggyConnectorResponse connector = pluggyItem.connector();
-        if (connector == null || connector.id() == null || !StringUtils.hasText(connector.name())) {
-            throw new BusinessException(
-                    "A Pluggy nao retornou os dados da instituicao do Item.",
-                    HttpStatus.BAD_GATEWAY
-            );
+    
+    @Async
+    public void itemUpdated(ItemUpdatedDTO dto) {
+        List<Account> accounts = accountSyncService.syncAccountsByItem(UUID.fromString(dto.clientUserId()), UUID.fromString(dto.itemId()));
+        
+        for (Account account: accounts) {
+            transactionSyncService.syncTransactions(account);
         }
     }
 

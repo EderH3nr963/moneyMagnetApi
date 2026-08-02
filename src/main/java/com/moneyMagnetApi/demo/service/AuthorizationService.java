@@ -179,22 +179,6 @@ public class AuthorizationService {
         resetToken.setUsedAt(Instant.now());
         tokenRepository.save(resetToken);
     }
-    
-    public Item validateItem(UUID userId, UUID itemId) {
-        return resourceAuthorizationService.validateItem(userId, itemId);
-    }
-    
-    public Account validateAccount(UUID userId, UUID accountId) {
-        return resourceAuthorizationService.validateAccount(userId, accountId);
-    }
-    
-    public Transaction validateTransaction(UUID userId, UUID transactionId) {
-        return resourceAuthorizationService.validateTransaction(userId, transactionId);
-    }
-    
-    public Category validateCategory(UUID userId, UUID categoryId) {
-        return resourceAuthorizationService.validateCategory(userId, categoryId);
-    }
 
     @Transactional
     public AuthenticatedSession refresh(String rawRefreshToken) {
