@@ -7,6 +7,7 @@ import com.moneyMagnetApi.demo.dto.category.request.CreateCategoryRequest;
 import com.moneyMagnetApi.demo.dto.category.request.UpdateCategoryRequest;
 import com.moneyMagnetApi.demo.dto.category.response.CategoryResponse;
 import com.moneyMagnetApi.demo.dto.category.response.MerchantCategoryRuleResponse;
+import com.moneyMagnetApi.demo.mappers.CategoryMapper;
 import com.moneyMagnetApi.demo.repository.CategoryRepository;
 import com.moneyMagnetApi.demo.repository.UsuarioRepository;
 import com.moneyMagnetApi.demo.utils.StringNormalize;
@@ -35,21 +36,12 @@ public class CategeoryService {
     public CategoryResponse create(UUID userId, CreateCategoryRequest request) {
         Usuario usuario = usuarioRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
-
-        String name = request.name().trim();
-        String normalizedName = StringNormalize.normalize(name);
-
-        if (categoryRepository.existsByNormalizedNameAndUsuarioId(normalizedName, userId)) {
+        
+        Category category = CategoryMapper.toEntity(request, usuario);
+        
+        if (categoryRepository.existsByNormalizedNameAndUsuarioId(category.getNormalizedName(), userId)) {
             throw new ValidationException("Já existe uma categoria com esse nome");
         }
-
-        Category category = Category.builder()
-                .name(name)
-                .normalizedName(normalizedName)
-                .color(request.color())
-                .icon(request.icon())
-                .usuario(usuario)
-                .build();
 
         CategoryResponse response = CategoryResponse.fromResponse(categoryRepository.save(category));
         invalidateCategoryRelatedCaches(userId);

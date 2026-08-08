@@ -1,4 +1,4 @@
-package com.moneyMagnetApi.demo.service;
+package com.moneyMagnetApi.demo.mappers;
 
 import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.account.AccountType;
@@ -8,7 +8,6 @@ import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionStatus;
 import com.moneyMagnetApi.demo.domain.transaction.TransactionType;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyTransactionResponse;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -16,10 +15,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Locale;
 
-@Component
+
 public class PluggyTransactionMapper {
 
-    public void fill(Transaction target, Account account, Category category, PluggyTransactionResponse source) {
+    public static void toEntity(Transaction target, Account account, Category category, PluggyTransactionResponse source) {
         target.setPluggyTransactionId(source.id());
         target.setAccount(account);
         target.setDescription(resolveDescription(source));
@@ -36,8 +35,8 @@ public class PluggyTransactionMapper {
         target.setNature(resolveNature(source, account));
         target.setCategory(category);
     }
-
-    public TransactionNature resolveNature(PluggyTransactionResponse source, Account account) {
+    
+    public static TransactionNature resolveNature(PluggyTransactionResponse source, Account account) {
         if (StringUtils.hasText(source.nature())) {
             String normalized = source.nature().trim().replace('-', '_').replace(' ', '_')
                     .toUpperCase(Locale.ROOT);
@@ -66,23 +65,23 @@ public class PluggyTransactionMapper {
         return resolveType(source) == TransactionType.CREDIT
                 ? TransactionNature.INCOME : TransactionNature.EXPENSE;
     }
-
-    public String resolveMerchant(PluggyTransactionResponse source) {
+    
+    public static String resolveMerchant(PluggyTransactionResponse source) {
         return source.merchant() == null ? null : source.merchant().name();
     }
 
-    private String resolveDescription(PluggyTransactionResponse source) {
+    public static String resolveDescription(PluggyTransactionResponse source) {
         return StringUtils.hasText(source.description()) ? source.description().trim() : "Transacao Pluggy";
     }
-
-    private BigDecimal resolveAmount(PluggyTransactionResponse source) {
+    
+    public static BigDecimal resolveAmount(PluggyTransactionResponse source) {
         if (source.amount() == null) {
             throw new IllegalArgumentException("Transacao sem valor: " + source.id());
         }
         return source.amount();
     }
-
-    private String resolveCurrency(PluggyTransactionResponse source, Account account) {
+    
+    public static String resolveCurrency(PluggyTransactionResponse source, Account account) {
         if (StringUtils.hasText(source.currencyCode())) {
             return source.currencyCode().trim().toUpperCase(Locale.ROOT);
         }
@@ -91,15 +90,15 @@ public class PluggyTransactionMapper {
         }
         throw new IllegalArgumentException("Transacao sem moeda configurada: " + source.id());
     }
-
-    private LocalDateTime resolveDate(PluggyTransactionResponse source) {
+    
+    public static LocalDateTime resolveDate(PluggyTransactionResponse source) {
         if (source.date() == null) {
             throw new IllegalArgumentException("Transacao sem data: " + source.id());
         }
         return source.date().atZone(ZoneOffset.UTC).toLocalDateTime();
     }
-
-    private TransactionType resolveType(PluggyTransactionResponse source) {
+    
+    public static TransactionType resolveType(PluggyTransactionResponse source) {
         if (StringUtils.hasText(source.type())) {
             try {
                 return TransactionType.valueOf(source.type().trim().toUpperCase(Locale.ROOT));

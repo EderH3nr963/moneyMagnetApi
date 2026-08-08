@@ -4,7 +4,6 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.moneyMagnetApi.demo.domain.category.Category;
 import com.moneyMagnetApi.demo.domain.category.PluggyCategoryMapping;
 import com.moneyMagnetApi.demo.repository.PluggyCategoryMappingRepository;
-import com.moneyMagnetApi.demo.repository.PluggyCategoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,7 +17,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class CategoryMappingService {
     
-    private final PluggyCategoryRepository pluggyCategoryRepository;
     private final PluggyCategoryMappingRepository pluggyCategoryMappingRepository;
     private final Cache<String, Map<String, Category>> pluggyCategoryMappingsCache;
     

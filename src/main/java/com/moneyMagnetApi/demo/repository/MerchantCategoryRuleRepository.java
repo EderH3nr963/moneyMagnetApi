@@ -11,8 +11,6 @@ public interface MerchantCategoryRuleRepository extends JpaRepository<MerchantCa
 
     Optional<MerchantCategoryRule> findByIdAndUsuarioId(UUID id, UUID userId);
 
-    Optional<MerchantCategoryRule> findByUsuarioIdAndNormalizedMerchant(UUID userId, String normalizedMerchant);
-
     boolean existsByUsuarioIdAndNormalizedMerchant(UUID userId, String normalizedMerchant);
 
     List<MerchantCategoryRule> findAllByUsuarioIdOrderByMerchantAsc(UUID userId);

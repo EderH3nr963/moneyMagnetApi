@@ -2,9 +2,11 @@ package com.moneyMagnetApi.demo.service;
 
 import com.moneyMagnetApi.demo.domain.auditLog.AuditLog;
 import com.moneyMagnetApi.demo.domain.usuario.Usuario;
+import com.moneyMagnetApi.demo.dto.auditLog.AuditLogEntry;
 import com.moneyMagnetApi.demo.repository.AuditLogRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +27,18 @@ public class AuditLogService {
     private final EntityManager entityManager;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Async
     public void save(AuditLogEntry entry) {
-        Usuario usuario = entry.userId() == null
-                ? null
-                : entityManager.getReference(Usuario.class, entry.userId());
-
+        if (entry.resource().startsWith("/health")) {
+            return;
+        }
+        
+        if (entry.userId() == null) {
+            return;
+        }
+        
+        Usuario usuario = entityManager.getReference(Usuario.class, entry.userId());
+        
         AuditLog auditLog = AuditLog.builder()
                 .usuario(usuario)
                 .action(limit(entry.action(), ACTION_LIMIT))
@@ -50,17 +59,5 @@ public class AuditLogService {
         }
 
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
-    }
-
-    public record AuditLogEntry(
-            UUID userId,
-            String action,
-            String resource,
-            UUID resourceId,
-            String status,
-            String ip,
-            String userAgent,
-            String metadata
-    ) {
     }
 }

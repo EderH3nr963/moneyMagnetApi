@@ -18,9 +18,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -32,9 +32,6 @@ public class ItemService {
 
     public static final String ITEM_CREATED_UPDATED_EVENT = "ITEM_CREATED_UPDATED";
 
-    private static final Set<String> SYNCHRONIZABLE_STATUSES =
-            Set.of("SUCCESS", "PARTIAL_SUCCESS");
-
     private final PluggyClient pluggyClient;
     private final ItemRepository itemRepository;
     private final InstitutionRepository institutionRepository;
@@ -43,7 +40,6 @@ public class ItemService {
     private final TransactionSyncService transactionSyncService;
     private final AppCacheInvalidationService cacheInvalidationService;
     private final DashboardSseService dashboardSseService;
-    private final @Qualifier("transactionSyncExecutor") Executor transactionSyncExecutor;
 
     @Async("webhookTaskExecutor")
     public void itemCreated(ItemCreatedDTO dto) {
@@ -51,12 +47,11 @@ public class ItemService {
         UUID usuarioId = UUID.fromString(dto.clientUserId());
         
         PluggyItemResponse pluggyItem = pluggyClient.getItem(pluggyItemId);
-
-        Institution institution = upsertInstitution(pluggyItem.connector());
-        Item item = upsertItem(usuarioId, pluggyItem, institution);
+        
+        Item item = upsertItem(usuarioId, pluggyItem);
 
         List<Account> accounts = accountSyncService.syncAccountsByItem(usuarioId, item.getId());
-        syncTransactionsInParallel(accounts);
+        transactionSyncService.syncTransactionsInParallel(accounts);
         
         cacheInvalidationService.invalidateUserData(usuarioId);
         
@@ -68,22 +63,14 @@ public class ItemService {
     public void itemUpdated(ItemUpdatedDTO dto) {
         List<Account> accounts = accountSyncService.syncAccountsByItem(UUID.fromString(dto.clientUserId()), UUID.fromString(dto.itemId()));
         
-        syncTransactionsInParallel(accounts);
+        transactionSyncService.syncTransactionsInParallel(accounts);
         cacheInvalidationService.invalidateUserData(UUID.fromString(dto.clientUserId()));
         
         dashboardSseService.emitToUser(UUID.fromString(dto.clientUserId()), ITEM_CREATED_UPDATED_EVENT,
                 Map.of("status", "synchronized"));
     }
 
-    void syncTransactionsInParallel(List<Account> accounts) {
-        CompletableFuture<?>[] synchronizations = accounts.stream()
-                .map(account -> CompletableFuture.runAsync(
-                        () -> transactionSyncService.syncTransactionsNow(account),
-                        transactionSyncExecutor))
-                .toArray(CompletableFuture[]::new);
-
-        CompletableFuture.allOf(synchronizations).join();
-    }
+    
 
     private Institution upsertInstitution(PluggyConnectorResponse connector) {
         String connectorId = connector.id().toString();
@@ -98,14 +85,15 @@ public class ItemService {
 
         return institutionRepository.save(institution);
     }
-
+    
+    @Transactional
     private Item upsertItem(
             UUID usuarioId,
-            PluggyItemResponse pluggyItem,
-            Institution institution
+            PluggyItemResponse pluggyItem
     ) {
         Item item = itemRepository.findByPluggyItemId(pluggyItem.id())
                 .orElseGet(Item::new);
+        Institution institution = upsertInstitution(pluggyItem.connector());
 
         if (item.getId() != null && !item.getUsuario().getId().equals(usuarioId)) {
             throw new AccessDeniedException("O Item ja esta vinculado a outro usuario.");

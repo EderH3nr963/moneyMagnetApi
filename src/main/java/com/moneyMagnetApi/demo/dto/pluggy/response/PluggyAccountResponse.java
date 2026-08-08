@@ -1,7 +1,10 @@
 package com.moneyMagnetApi.demo.dto.pluggy.response;
 
+import lombok.Builder;
+
 import java.math.BigDecimal;
 
+@Builder
 public record PluggyAccountResponse(
         String id,
         String type,
