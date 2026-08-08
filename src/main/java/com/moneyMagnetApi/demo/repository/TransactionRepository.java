@@ -126,9 +126,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         SELECT t
                         FROM Transaction t
                         WHERE t.account.item.usuario.id = :userId
-                          AND t.date >= :startDate
-                          AND t.date < :endDate
-                        order by t.date desc
+                          AND t.paymentDate BETWEEN :startDate AND :endDate
+                        ORDER BY t.paymentDate desc
         """)
         @EntityGraph(attributePaths = { "account", "category" })
         List<Transaction> findAllByUserAndPeriod(
@@ -136,10 +135,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate);
         
-        @Query("""
+        @Query(value = """
             SELECT
-                YEAR(t.date) AS year,
-                MONTH(t.date) AS month,
+                YEAR(t.paymentDate) AS year,
+                MONTH(t.paymentDate) AS month,
         
                 SUM(
                     CASE
@@ -159,11 +158,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
         
             FROM Transaction t
             WHERE t.account.item.usuario.id = :userId
-              AND t.paymentDate >= :startDate
-              AND t.paymentDate < :endDate
-        
-            GROUP BY YEAR(t.date), MONTH(t.date)
-            ORDER BY YEAR(t.date), MONTH(t.date)
+              AND t.paymentDate BETWEEN :startDate AND :endDate
+            GROUP BY YEAR(t.paymentDate), MONTH(t.paymentDate)
+            ORDER BY YEAR(t.paymentDate), MONTH(t.paymentDate)
         """)
         List<MonthlyFinancialProjection> findMonthlyFinancialSummary(
                 UUID userId,

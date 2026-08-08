@@ -1,7 +1,8 @@
 package com.moneyMagnetApi.demo.security;
 
+import com.moneyMagnetApi.demo.dto.auditLog.AuditLogEntry;
+import com.moneyMagnetApi.demo.mappers.AuditLogMapper;
 import com.moneyMagnetApi.demo.service.AuditLogService;
-import com.moneyMagnetApi.demo.service.AuditLogService.AuditLogEntry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,9 +27,6 @@ import java.util.regex.Pattern;
 public class AuditLogFilter extends OncePerRequestFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AuditLogFilter.class);
-    private static final Pattern UUID_PATTERN = Pattern.compile(
-            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-    );
 
     private final AuditLogService auditLogService;
 
@@ -56,103 +54,16 @@ public class AuditLogFilter extends OncePerRequestFilter {
             long durationMs = TimeUnit.NANOSECONDS.toMillis(
                     System.nanoTime() - startedAt
             );
-            String route = resolveRoute(request);
-            UUID userId = resolveUserId();
             
-            if (route.startsWith("/health")) {
-                return;
-            }
-            
-            if (userId == null) {
-                return;
-            }
+            AuditLogEntry auditLogEntry = AuditLogMapper.toEntry(request, response, durationMs);
 
-            auditLogService.save(new AuditLogEntry(
-                    userId,
-                    request.getMethod(),
-                    route,
-                    resolveResourceId(request),
-                    resolveStatus(response.getStatus()),
-                    resolveIp(request),
-                    request.getHeader("User-Agent"),
-                    metadata(request, response, durationMs)
-            ));
+            auditLogService.save(auditLogEntry);
         } catch (Exception exception) {
             LOGGER.warn("Nao foi possivel gravar audit log: {}", exception.getMessage());
         }
     }
+    
+   
 
-    private UUID resolveUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !(authentication.getPrincipal() instanceof UsuarioDetailsImpl details)) {
-            return null;
-        }
-
-        return details.getId();
-    }
-
-    private String resolveRoute(HttpServletRequest request) {
-        Object pattern = request.getAttribute(
-                HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE
-        );
-
-        return pattern == null ? request.getRequestURI() : pattern.toString();
-    }
-
-    private UUID resolveResourceId(HttpServletRequest request) {
-        String[] segments = request.getRequestURI().split("/");
-        for (int index = segments.length - 1; index >= 0; index--) {
-            String segment = segments[index];
-            if (UUID_PATTERN.matcher(segment).matches()) {
-                return UUID.fromString(segment);
-            }
-        }
-
-        return null;
-    }
-
-    private String resolveStatus(int httpStatus) {
-        if (httpStatus >= 500) {
-            return "SERVER_ERROR";
-        }
-        if (httpStatus >= 400) {
-            return "CLIENT_ERROR";
-        }
-        if (httpStatus >= 300) {
-            return "REDIRECT";
-        }
-        return "SUCCESS";
-    }
-
-    private String resolveIp(HttpServletRequest request) {
-        return request.getRemoteAddr();
-    }
-
-    private String metadata(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            long durationMs
-    ) {
-        return """
-                {"method":"%s","uri":"%s","query":"%s","status":%d,"durationMs":%d}
-                """.formatted(
-                json(request.getMethod()),
-                json(request.getRequestURI()),
-                json(request.getQueryString()),
-                response.getStatus(),
-                durationMs
-        ).trim();
-    }
-
-    private String json(String value) {
-        if (value == null) {
-            return "";
-        }
-
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\r", "\\r")
-                .replace("\n", "\\n");
-    }
+    
 }

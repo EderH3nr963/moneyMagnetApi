@@ -45,7 +45,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
                 Usuario usuario = usuarioByIdCache
                         .get(validatedToken.userId().toString(), key -> usuarioRepository.findById(UUID.fromString(key)).orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado para o token.")));
-
+                
                 if (usuario.getTokenVersion() != validatedToken.tokenVersion()) {
                     throw new JWTVerificationException("Sessao revogada.");
                 }

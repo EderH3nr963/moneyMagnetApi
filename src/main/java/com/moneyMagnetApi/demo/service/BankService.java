@@ -16,9 +16,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,19 +32,35 @@ public class BankService {
     private final ItemRepository itemRepository;
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
-
+    private final ResourceAuthorizationService resourceAuthorizationService;
+    
     public List<InstitutionProfileResponse> findAll(UUID userId) {
-        return itemRepository.findAllByUsuarioId(userId).stream()
-                .map(item -> toResponse(item, accountsFor(userId, item.getId())))
-                .sorted(Comparator.comparing(InstitutionProfileResponse::name, String.CASE_INSENSITIVE_ORDER))
+        List<Account> accounts =
+                accountRepository.findAllByItemUsuarioIdOrderByNameAsc(userId);
+        
+        List<Item> items =
+                itemRepository.findAllByUsuarioId(userId);
+        
+        Map<UUID, List<Account>> accountsByItem =
+                accounts.stream()
+                        .collect(Collectors.groupingBy(
+                                account -> account.getItem().getId()
+                        ));
+        
+        return items.stream()
+                .map(item -> toResponse(
+                        item,
+                        accountsByItem.getOrDefault(item.getId(), List.of())
+                ))
                 .toList();
     }
 
     public InstitutionProfileResponse findProfile(UUID userId, UUID itemId) {
-        Item item = itemRepository.findByIdAndUsuarioId(itemId, userId)
-                .orElseThrow(() -> new EntityNotFoundException("Banco nao encontrado para este usuario."));
+        Item item = resourceAuthorizationService.validateItem(userId, itemId);
+        
+        List<Account> accounts = accountRepository.findAllByItemIdAndItemUsuarioIdOrderByNameAsc(itemId, userId);
 
-        return toResponse(item, accountsFor(userId, itemId));
+        return toResponse(item, accounts);
     }
 
     public Page<TransactionResponse> findTransactions(
@@ -61,10 +76,6 @@ public class BankService {
         return transactionRepository.findAllByUserAndItemAndAccountType(
                 userId, itemId, accountType, DEFAULT_NATURES, pageable
         ).map(TransactionResponse::fromResponse);
-    }
-
-    private List<Account> accountsFor(UUID userId, UUID itemId) {
-        return accountRepository.findAllByItemIdAndItemUsuarioIdOrderByNameAsc(itemId, userId);
     }
 
     private InstitutionProfileResponse toResponse(Item item, List<Account> accounts) {

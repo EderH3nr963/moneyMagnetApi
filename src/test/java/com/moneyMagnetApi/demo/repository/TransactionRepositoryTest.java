@@ -170,7 +170,7 @@ class TransactionRepositoryTest {
         Transaction start = persistTransaction(account, "10.00", TransactionType.CREDIT, "2025-01-01T00:00:00");
         Transaction newer = persistTransaction(account, "20.00", TransactionType.CREDIT, "2025-01-31T23:59:59");
         Transaction older = persistTransaction(account, "30.00", TransactionType.CREDIT, "2025-01-15T10:00:00");
-        persistTransaction(account, "40.00", TransactionType.CREDIT, "2025-02-01T00:00:00");
+        persistTransaction(account, "40.00", TransactionType.CREDIT, "2025-02-01T00:00:01");
         persistTransaction(anotherUser, "50.00", TransactionType.CREDIT, "2025-01-15T10:00:00");
         flushAndClear();
 
@@ -193,7 +193,7 @@ class TransactionRepositoryTest {
         Account another = persistAccount(persistUser("outro_usuario"), "account-2");
         persistTransaction(another, "999.00", TransactionType.CREDIT, "2025-01-10T10:00:00");
         persistTransaction(account, "888.00", TransactionType.CREDIT, "2024-12-31T23:59:59");
-        persistTransaction(account, "777.00", TransactionType.CREDIT, "2026-01-01T00:00:00");
+        persistTransaction(account, "777.00", TransactionType.CREDIT, "2026-01-01T00:00:01");
         flushAndClear();
 
         List<MonthlyFinancialProjection> result = transactionRepository.findMonthlyFinancialSummary(

@@ -3,11 +3,12 @@ package com.moneyMagnetApi.demo.service;
 import com.moneyMagnetApi.demo.domain.account.Account;
 import com.moneyMagnetApi.demo.domain.category.Category;
 import com.moneyMagnetApi.demo.domain.transaction.Transaction;
-import com.moneyMagnetApi.demo.domain.transaction.TransactionNature;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyTransactionResponse;
+import com.moneyMagnetApi.demo.mappers.PluggyTransactionMapper;
 import com.moneyMagnetApi.demo.repository.AccountRepository;
 import com.moneyMagnetApi.demo.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -17,7 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -33,14 +36,10 @@ public class TransactionSyncService {
     private final CategoryMappingService categoryMappingService;
     private final MerchantCategoryRuleService merchantCategoryRuleService;
     private final AppCacheInvalidationService cacheInvalidationService;
-    private final PluggyTransactionMapper transactionMapper;
+    private final @Qualifier("transactionSyncExecutor") Executor transactionSyncExecutor;
 
     @Transactional
     public int syncTransactionsNow(Account account) {
-        return syncTransactionsInternal(account);
-    }
-
-    private int syncTransactionsInternal(Account account) {
         if (account == null) {
             throw new IllegalArgumentException("Conta nao informada.");
         }
@@ -71,7 +70,6 @@ public class TransactionSyncService {
 
             Map<String, Category> mapCategories = categoryMappingService.getCategories();
             
-            // Regras de merchant
             UUID userId = account.getItem().getUsuario().getId();
             Map<String, Category> merchantRules = merchantCategoryRuleService.getActiveRulesByMerchant(userId);
 
@@ -89,12 +87,12 @@ public class TransactionSyncService {
 
                 Category merchantCategory = merchantCategoryRuleService.resolveCategoryForMerchant(
                         merchantRules,
-                        transactionMapper.resolveMerchant(dto));
+                        PluggyTransactionMapper.resolveMerchant(dto));
                 if (merchantCategory != null) {
                     category = merchantCategory;
                 }
 
-                transactionMapper.fill(transaction, account, category, dto);
+                PluggyTransactionMapper.toEntity(transaction, account, category, dto);
                 entities.add(transaction);
             }
 
@@ -110,10 +108,14 @@ public class TransactionSyncService {
             syncingAccounts.remove(account.getId().toString());
         }
     }
-
-    TransactionNature resolveNature(
-            PluggyTransactionResponse dto,
-            Account account) {
-        return transactionMapper.resolveNature(dto, account);
+    
+    public void syncTransactionsInParallel(List<Account> accounts) {
+        CompletableFuture<?>[] synchronizations = accounts.stream()
+                .map(account -> CompletableFuture.runAsync(
+                        () -> syncTransactionsNow(account),
+                        transactionSyncExecutor))
+                .toArray(CompletableFuture[]::new);
+        
+        CompletableFuture.allOf(synchronizations).join();
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -44,13 +45,11 @@ public class TransactionService {
             String search,
             Pageable pageable
     ) {
+        
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("A data inicial nao pode ser maior que a data final.");
         }
-
-        List<Account> accounts =
-                accountRepository.findAllByItemUsuarioIdOrderByNameAsc(userId);
-
+        
         return transactionsPageCache.get(
                 transactionPageCacheKey(userId, startDate, endDate, accountId, pageable, search),
                 key -> loadTransactionsPage(userId, startDate, endDate, accountId, search, pageable)
@@ -65,10 +64,7 @@ public class TransactionService {
             String search,
             Pageable pageable
     ) {
-
-        Page<Transaction> transactions;
-        
-        transactions = transactionRepository.findWithFilters(
+        Page<Transaction> transactions = transactionRepository.findWithFilters(
                 userId,
                 DEFAULT_NATURES.stream().map(Enum::name).toList(),
                 accountId,

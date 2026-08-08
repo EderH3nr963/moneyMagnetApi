@@ -1,25 +1,21 @@
 package com.moneyMagnetApi.demo.service;
 
 import com.moneyMagnetApi.demo.domain.account.Account;
-import com.moneyMagnetApi.demo.domain.account.AccountType;
 import com.moneyMagnetApi.demo.domain.item.Item;
 import com.moneyMagnetApi.demo.dto.pluggy.response.PluggyAccountResponse;
+import com.moneyMagnetApi.demo.mappers.AccountMapper;
 import com.moneyMagnetApi.demo.repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -27,118 +23,50 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AccountSyncService {
     
-    private final ConcurrentHashMap<String, Boolean> syncingItems = new ConcurrentHashMap<>();
-    
     private final ResourceAuthorizationService resourceAuthorizationService;
     private final PluggyClient pluggyClient;
     private final AccountRepository accountRepository;
     private final AppCacheInvalidationService cacheInvalidationService;
-
     
     @Transactional
     public List<Account> syncAccountsByItem(UUID userId, UUID itemId) {
         Item item = resourceAuthorizationService.validateItem(userId, itemId);
+        
+        List<PluggyAccountResponse> pluggyAccounts = pluggyClient.getAccounts(item.getPluggyItemId());
+        LocalDateTime syncedAt = LocalDateTime.now();
 
-        if (syncingItems.putIfAbsent(itemId.toString(), true) != null) {
-            return List.of();
-        }
+        List<Account> entities = new ArrayList<>();
+        Set<String> pluggyAccountIds = pluggyAccounts.stream()
+                .map(PluggyAccountResponse::id)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        
+        Map<String, Account> accountsByPluggyId =
+                        accountRepository
+                            .findAllByItemIdAndPluggyAccountIdIn(item.getId(), pluggyAccountIds)
+                            .stream()
+                            .collect(Collectors.toMap(Account::getPluggyAccountId, Function.identity()));
 
-        try {
-            List<PluggyAccountResponse> pluggyAccounts = pluggyClient.getAccounts(item.getPluggyItemId());
-            LocalDateTime syncedAt = LocalDateTime.now();
-
-            List<Account> entities = new ArrayList<>();
-            Set<String> pluggyAccountIds = pluggyAccounts.stream()
-                    .map(PluggyAccountResponse::id)
-                    .filter(StringUtils::hasText)
-                    .collect(Collectors.toSet());
-            
-            Map<String, Account> accountsByPluggyId =
-                    pluggyAccountIds.isEmpty() ?
-                            accountsByPluggyId = Map.of() :
-                            accountRepository
-                                .findAllByItemIdAndPluggyAccountIdIn(item.getId(), pluggyAccountIds)
-                                .stream()
-                                .collect(Collectors.toMap(Account::getPluggyAccountId, Function.identity()));
-
-            
-            for (PluggyAccountResponse response : pluggyAccounts) {
-                if (!StringUtils.hasText(response.id())) {
-                    continue;
-                }
-                
-                Account account = accountsByPluggyId.get(response.id());
-                if (account == null) {
-                    account = new Account();
-                    account.setPluggyAccountId(response.id());
-                }
-                
-                fillAccount(account, item, response, syncedAt);
-                entities.add(account);
+        
+        for (PluggyAccountResponse response : pluggyAccounts) {
+            if (!StringUtils.hasText(response.id())) {
+                continue;
             }
             
-            List<Account> savedAccounts = accountRepository.saveAll(entities);
-            cacheInvalidationService.invalidateUserData(userId);
-
-            return savedAccounts;
-        } finally {
-            syncingItems.remove(itemId.toString());
+            Account account = accountsByPluggyId.get(response.id());
+            if (account == null) {
+                account = new Account();
+                account.setPluggyAccountId(response.id());
+            }
+            
+            AccountMapper.toEntity(account, response, item, syncedAt);
+            entities.add(account);
         }
-    }
-    
-    private void fillAccount(
-            Account account,
-            Item item,
-            PluggyAccountResponse response,
-            LocalDateTime syncedAt
-    ) {
-        account.setItem(item);
-        account.setName(resolveName(response));
-        account.setType(resolveType(response));
-        account.setSubtype(response.subtype());
-        account.setCurrency(resolveCurrency(response.currencyCode()));
-        account.setBalance(response.balance() == null ? BigDecimal.ZERO : response.balance());
-        account.setCreditLimit(response.creditData() == null ? null : response.creditData().creditLimit());
-        account.setNumber(resolveNumber(response));
-        account.setLastAccountSync(syncedAt);
-    }
-    
-    private String resolveName(PluggyAccountResponse response) {
-        if (StringUtils.hasText(response.marketingName())) {
-            return response.marketingName().trim();
-        }
-        if (StringUtils.hasText(response.name())) {
-            return response.name().trim();
-        }
-        return "Conta";
-    }
-    
-    private AccountType resolveType(PluggyAccountResponse response) {
-        String value = ((response.type() == null ? "" : response.type()) + " "
-                + (response.subtype() == null ? "" : response.subtype()))
-                .toUpperCase(Locale.ROOT);
         
-        if (value.contains("CHECKING") || value.contains("CONTA_CORRENTE")) return AccountType.CHECKING;
-        if (value.contains("SAVING") || value.contains("POUPANCA")) return AccountType.SAVINGS;
-        if (value.contains("CREDIT") || value.contains("CARTAO")) return AccountType.CREDIT;
-        if (value.contains("LOAN") || value.contains("EMPRESTIMO")) return AccountType.LOAN;
-        if (value.contains("INVEST")) return AccountType.INVESTMENT;
-        if (value.contains("WALLET")) return AccountType.WALLET;
-        if (value.contains("PREPAID")) return AccountType.PREPAID;
-        return AccountType.OTHER;
+        List<Account> savedAccounts = accountRepository.saveAll(entities);
+        cacheInvalidationService.invalidateUserData(userId);
+
+        return savedAccounts;
     }
-    
-    private String resolveCurrency(String currency) {
-        return StringUtils.hasText(currency) ? currency.trim().toUpperCase(Locale.ROOT) : "BRL";
-    }
-    
-    private String resolveNumber(PluggyAccountResponse response) {
-        if (StringUtils.hasText(response.number())) {
-            return response.number().trim();
-        }
-        if (response.bankData() != null && StringUtils.hasText(response.bankData().transferNumber())) {
-            return response.bankData().transferNumber().trim();
-        }
-        return null;
-    }
+   
 }
